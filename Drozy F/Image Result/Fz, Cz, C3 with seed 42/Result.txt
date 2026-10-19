@@ -1,0 +1,320 @@
+Model input channels (R, G, B): ('Fz', 'Cz', 'C3')
+Loaded Spectrograms Shape: (8604, 224, 224, 3)
+Loaded Labels Shape: (8604,)
+Train subjects: [np.int64(1), np.int64(2), np.int64(3), np.int64(4), np.int64(5), np.int64(6), np.int64(11), np.int64(12), np.int64(13),np.int64(14)]
+Held-out subjects: [np.int64(7), np.int64(8), np.int64(9), np.int64(10)]
+Training class counts: Alert=3107, Drowsy=3346; loss weights: Alert=1.038, Drowsy=0.964
+Epoch 1/8 - Loss: 0.5701 - Train Acc: 0.6966 - Val Acc: 0.5207 - Val Balanced Acc: 0.5952
+Epoch 2/8 - Loss: 0.4332 - Train Acc: 0.7968 - Val Acc: 0.5379 - Val Balanced Acc: 0.6196
+Epoch 3/8 - Loss: 0.2928 - Train Acc: 0.8751 - Val Acc: 0.4979 - Val Balanced Acc: 0.5900
+Epoch 4/8 - Loss: 0.1582 - Train Acc: 0.9368 - Val Acc: 0.5532 - Val Balanced Acc: 0.6185
+Early stopping at epoch 4; restoring epoch 2 (best validation balanced accuracy: 0.6196).
+[SHAP] Building GradientExplainer with 30 background samples...
+[SHAP] Computing SHAP values for 20 stratified held-out samples...
+[SHAP DEBUG] num_output_classes : 2
+[SHAP DEBUG] type(shap_values)  : <class 'numpy.ndarray'>
+[SHAP DEBUG] shap_values.shape  : (20, 3, 224, 224, 2)
+
+============================================================
+  [1] SHAP STRUCTURE VERIFICATION
+  (stats: all 20 samples | figure: first 4 samples)
+============================================================
+  Sample #1: Pearson r(alert, drowsy) = -0.9989  p=0.000e+00  -> anti-correlated
+  Sample #2: Pearson r(alert, drowsy) = -0.9983  p=0.000e+00  -> anti-correlated
+  Sample #3: Pearson r(alert, drowsy) = -0.9986  p=0.000e+00  -> anti-correlated
+  Sample #4: Pearson r(alert, drowsy) = -0.9986  p=0.000e+00  -> anti-correlated
+  Sample #5: Pearson r(alert, drowsy) = -0.9987  p=0.000e+00  -> anti-correlated
+  Sample #6: Pearson r(alert, drowsy) = -0.9985  p=0.000e+00  -> anti-correlated
+  Sample #7: Pearson r(alert, drowsy) = -0.9986  p=0.000e+00  -> anti-correlated
+  Sample #8: Pearson r(alert, drowsy) = -0.9991  p=0.000e+00  -> anti-correlated
+  Sample #9: Pearson r(alert, drowsy) = -0.9989  p=0.000e+00  -> anti-correlated
+  Sample #10: Pearson r(alert, drowsy) = -0.9989  p=0.000e+00  -> anti-correlated
+  Sample #11: Pearson r(alert, drowsy) = -0.9987  p=0.000e+00  -> anti-correlated
+  Sample #12: Pearson r(alert, drowsy) = -0.9988  p=0.000e+00  -> anti-correlated
+  Sample #13: Pearson r(alert, drowsy) = -0.9983  p=0.000e+00  -> anti-correlated
+  Sample #14: Pearson r(alert, drowsy) = -0.9983  p=0.000e+00  -> anti-correlated
+  Sample #15: Pearson r(alert, drowsy) = -0.9984  p=0.000e+00  -> anti-correlated
+  Sample #16: Pearson r(alert, drowsy) = -0.9982  p=0.000e+00  -> anti-correlated
+  Sample #17: Pearson r(alert, drowsy) = -0.9982  p=0.000e+00  -> anti-correlated
+  Sample #18: Pearson r(alert, drowsy) = -0.9985  p=0.000e+00  -> anti-correlated
+  Sample #19: Pearson r(alert, drowsy) = -0.9986  p=0.000e+00  -> anti-correlated
+  Sample #20: Pearson r(alert, drowsy) = -0.9986  p=0.000e+00  -> anti-correlated
+  Figure saved -> shap_structure_verification.png
+
+
+============================================================
+  [2] PER-BAND ATTRIBUTION  (class: Drowsy)
+  (stats: all 20 samples | figure: first 4 samples)
+============================================================
+
+  Sample #1  (True:Alert | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00182  (58.7%)
+    Theta (4-8 Hz)        : 0.00070  (22.5%)
+    Alpha (8-13 Hz)       : 0.00043  (14.0%)
+    Beta  (13-30 Hz)      : 0.00015  (4.8%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #2  (True:Alert | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00129  (54.8%)
+    Theta (4-8 Hz)        : 0.00053  (22.4%)
+    Alpha (8-13 Hz)       : 0.00039  (16.4%)
+    Beta  (13-30 Hz)      : 0.00015  (6.4%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #3  (True:Alert | Pred:Drowsy)
+    Delta (0.5-4 Hz)      : 0.00133  (55.1%)
+    Theta (4-8 Hz)        : 0.00055  (22.8%)
+    Alpha (8-13 Hz)       : 0.00038  (15.7%)
+    Beta  (13-30 Hz)      : 0.00016  (6.5%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #4  (True:Alert | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00164  (58.3%)
+    Theta (4-8 Hz)        : 0.00067  (23.8%)
+    Alpha (8-13 Hz)       : 0.00035  (12.4%)
+    Beta  (13-30 Hz)      : 0.00016  (5.5%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #5  (True:Alert | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00144  (55.6%)
+    Theta (4-8 Hz)        : 0.00061  (23.7%)
+    Alpha (8-13 Hz)       : 0.00038  (14.8%)
+    Beta  (13-30 Hz)      : 0.00015  (5.9%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #6  (True:Alert | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00125  (45.6%)
+    Theta (4-8 Hz)        : 0.00078  (28.3%)
+    Alpha (8-13 Hz)       : 0.00054  (19.8%)
+    Beta  (13-30 Hz)      : 0.00017  (6.4%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #7  (True:Alert | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00184  (57.9%)
+    Theta (4-8 Hz)        : 0.00059  (18.6%)
+    Alpha (8-13 Hz)       : 0.00051  (16.1%)
+    Beta  (13-30 Hz)      : 0.00023  (7.3%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #8  (True:Alert | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00173  (56.5%)
+    Theta (4-8 Hz)        : 0.00062  (20.4%)
+    Alpha (8-13 Hz)       : 0.00049  (15.9%)
+    Beta  (13-30 Hz)      : 0.00022  (7.2%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #9  (True:Alert | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00208  (62.6%)
+    Theta (4-8 Hz)        : 0.00061  (18.4%)
+    Alpha (8-13 Hz)       : 0.00048  (14.5%)
+    Beta  (13-30 Hz)      : 0.00015  (4.5%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #10  (True:Alert | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00153  (54.2%)
+    Theta (4-8 Hz)        : 0.00058  (20.6%)
+    Alpha (8-13 Hz)       : 0.00053  (18.8%)
+    Beta  (13-30 Hz)      : 0.00018  (6.4%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #11  (True:Drowsy | Pred:Drowsy)
+    Delta (0.5-4 Hz)      : 0.00124  (53.6%)
+    Theta (4-8 Hz)        : 0.00053  (23.0%)
+    Alpha (8-13 Hz)       : 0.00036  (15.4%)
+    Beta  (13-30 Hz)      : 0.00019  (8.0%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #12  (True:Drowsy | Pred:Drowsy)
+    Delta (0.5-4 Hz)      : 0.00140  (51.6%)
+    Theta (4-8 Hz)        : 0.00061  (22.7%)
+    Alpha (8-13 Hz)       : 0.00049  (18.2%)
+    Beta  (13-30 Hz)      : 0.00020  (7.4%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #13  (True:Drowsy | Pred:Drowsy)
+    Delta (0.5-4 Hz)      : 0.00137  (51.9%)
+    Theta (4-8 Hz)        : 0.00061  (23.2%)
+    Alpha (8-13 Hz)       : 0.00048  (18.4%)
+    Beta  (13-30 Hz)      : 0.00017  (6.5%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #14  (True:Drowsy | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00108  (50.5%)
+    Theta (4-8 Hz)        : 0.00043  (20.2%)
+    Alpha (8-13 Hz)       : 0.00046  (21.5%)
+    Beta  (13-30 Hz)      : 0.00017  (7.8%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #15  (True:Drowsy | Pred:Drowsy)
+    Delta (0.5-4 Hz)      : 0.00106  (42.2%)
+    Theta (4-8 Hz)        : 0.00076  (30.1%)
+    Alpha (8-13 Hz)       : 0.00051  (20.2%)
+    Beta  (13-30 Hz)      : 0.00019  (7.5%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #16  (True:Drowsy | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00174  (58.5%)
+    Theta (4-8 Hz)        : 0.00062  (20.8%)
+    Alpha (8-13 Hz)       : 0.00044  (14.8%)
+    Beta  (13-30 Hz)      : 0.00018  (5.9%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #17  (True:Drowsy | Pred:Drowsy)
+    Delta (0.5-4 Hz)      : 0.00125  (51.4%)
+    Theta (4-8 Hz)        : 0.00055  (22.8%)
+    Alpha (8-13 Hz)       : 0.00045  (18.3%)
+    Beta  (13-30 Hz)      : 0.00018  (7.5%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #18  (True:Drowsy | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00117  (50.6%)
+    Theta (4-8 Hz)        : 0.00051  (22.2%)
+    Alpha (8-13 Hz)       : 0.00041  (17.9%)
+    Beta  (13-30 Hz)      : 0.00021  (9.2%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #19  (True:Drowsy | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00142  (51.5%)
+    Theta (4-8 Hz)        : 0.00060  (21.8%)
+    Alpha (8-13 Hz)       : 0.00056  (20.2%)
+    Beta  (13-30 Hz)      : 0.00018  (6.4%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Sample #20  (True:Drowsy | Pred:Alert)
+    Delta (0.5-4 Hz)      : 0.00165  (55.6%)
+    Theta (4-8 Hz)        : 0.00066  (22.4%)
+    Alpha (8-13 Hz)       : 0.00047  (15.8%)
+    Beta  (13-30 Hz)      : 0.00018  (6.2%)
+    -> Dominant band: Delta (0.5-4 Hz)
+
+  Figure saved -> shap_band_attribution.png
+
+
+============================================================
+  [3] QUANTITATIVE SHAP EVALUATION
+============================================================
+
+  [A] Fidelity (top-K pixel occlusion)
+    AUC (original)  = 0.9300
+    AUC (occluded)  = 0.6900
+    AUC drop        = +0.2400  (good fidelity)
+
+  [B] Stability (2 noisy perturbations, sigma=0.05)
+    Sample #1: mean cosine similarity = 0.2093
+    Sample #2: mean cosine similarity = 0.1791
+    Sample #3: mean cosine similarity = 0.2397
+    Sample #4: mean cosine similarity = 0.1774
+    Sample #5: mean cosine similarity = 0.2115
+    Sample #6: mean cosine similarity = 0.2054
+    Sample #7: mean cosine similarity = 0.1343
+    Sample #8: mean cosine similarity = 0.1256
+    Sample #9: mean cosine similarity = 0.1830
+    Sample #10: mean cosine similarity = 0.1548
+    Sample #11: mean cosine similarity = 0.1697
+    Sample #12: mean cosine similarity = 0.2097
+    Sample #13: mean cosine similarity = 0.1797
+    Sample #14: mean cosine similarity = 0.2096
+    Sample #15: mean cosine similarity = 0.2123
+    Sample #16: mean cosine similarity = 0.3295
+    Sample #17: mean cosine similarity = 0.1465
+    Sample #18: mean cosine similarity = 0.1861
+    Sample #19: mean cosine similarity = 0.2135
+    Sample #20: mean cosine similarity = 0.1845
+    Overall mean cos similarity = 0.1931  (unstable - consider more background samples)
+
+  [C] Sparsity (Gini coefficient)
+    Sample #1: Gini = 0.6999
+    Sample #2: Gini = 0.6510
+    Sample #3: Gini = 0.6657
+    Sample #4: Gini = 0.6822
+    Sample #5: Gini = 0.6649
+    Sample #6: Gini = 0.6500
+    Sample #7: Gini = 0.6784
+    Sample #8: Gini = 0.6521
+    Sample #9: Gini = 0.7051
+    Sample #10: Gini = 0.6603
+    Sample #11: Gini = 0.6345
+    Sample #12: Gini = 0.6410
+    Sample #13: Gini = 0.6641
+    Sample #14: Gini = 0.6350
+    Sample #15: Gini = 0.6359
+    Sample #16: Gini = 0.6787
+    Sample #17: Gini = 0.6283
+    Sample #18: Gini = 0.6203
+    Sample #19: Gini = 0.6627
+    Sample #20: Gini = 0.6713
+    Mean Gini = 0.6591  (sparse (focused))
+
+  [D] Frequency-Band Localization
+    Sample #1: Delta=58.7%  Theta=22.5%  Alpha=14.0%  Beta=4.8%
+    Sample #2: Delta=54.8%  Theta=22.4%  Alpha=16.4%  Beta=6.4%
+    Sample #3: Delta=55.1%  Theta=22.8%  Alpha=15.7%  Beta=6.5%
+    Sample #4: Delta=58.3%  Theta=23.8%  Alpha=12.4%  Beta=5.5%
+    Sample #5: Delta=55.6%  Theta=23.7%  Alpha=14.8%  Beta=5.9%
+    Sample #6: Delta=45.6%  Theta=28.3%  Alpha=19.8%  Beta=6.4%
+    Sample #7: Delta=57.9%  Theta=18.6%  Alpha=16.1%  Beta=7.3%
+    Sample #8: Delta=56.5%  Theta=20.4%  Alpha=15.9%  Beta=7.2%
+    Sample #9: Delta=62.6%  Theta=18.4%  Alpha=14.5%  Beta=4.5%
+    Sample #10: Delta=54.2%  Theta=20.6%  Alpha=18.8%  Beta=6.4%
+    Sample #11: Delta=53.6%  Theta=23.0%  Alpha=15.4%  Beta=8.0%
+    Sample #12: Delta=51.6%  Theta=22.7%  Alpha=18.2%  Beta=7.4%
+    Sample #13: Delta=51.9%  Theta=23.2%  Alpha=18.4%  Beta=6.5%
+    Sample #14: Delta=50.5%  Theta=20.2%  Alpha=21.5%  Beta=7.8%
+    Sample #15: Delta=42.2%  Theta=30.1%  Alpha=20.2%  Beta=7.5%
+    Sample #16: Delta=58.5%  Theta=20.8%  Alpha=14.8%  Beta=5.9%
+    Sample #17: Delta=51.4%  Theta=22.8%  Alpha=18.3%  Beta=7.5%
+    Sample #18: Delta=50.6%  Theta=22.2%  Alpha=17.9%  Beta=9.2%
+    Sample #19: Delta=51.5%  Theta=21.8%  Alpha=20.2%  Beta=6.4%
+    Sample #20: Delta=55.6%  Theta=22.4%  Alpha=15.8%  Beta=6.2%
+    Mean across samples:
+      Delta (0.5-4 Hz)      :  53.8%  |||||||||||||||||||||
+      Theta (4-8 Hz)        :  22.5%  |||||||||
+      Alpha (8-13 Hz)       :  17.0%  ||||||
+      Beta  (13-30 Hz)      :   6.7%  ||
+
+  Figure saved -> shap_quantitative_evaluation.png
+
+============================================================
+  HELD-OUT SUBJECT CLASSIFICATION REPORT (ALL WINDOWS)
+============================================================
+  Samples evaluated : 2151
+  Precision         : 0.8470
+  Recall            : 0.3745
+  F1-Score          : 0.5193
+  ROC-AUC           : 0.6990
+              precision    recall  f1-score   support
+
+       Alert       0.41      0.86      0.56       717
+      Drowsy       0.85      0.37      0.52      1434
+
+    accuracy                           0.54      2151
+   macro avg       0.63      0.62      0.54      2151
+weighted avg       0.70      0.54      0.53      2151
+
+  Confusion Matrix:
+                Pred Alert  Pred Drowsy
+  True Alert   :     620         97    
+  True Drowsy  :     897        537    
+  Figure saved -> classification_report.png
+
+
+============================================================
+  SUMMARY
+============================================================
+  Background samples        : 30
+  SHAP explanation samples  : 20
+  Classification samples    : 2151
+  Test samples (displayed)  : 4
+  Precision                 : 0.8470
+  Recall                    : 0.3745
+  F1-Score                  : 0.5193
+  ROC-AUC                   : 0.6990
+  Fidelity    (AUC drop)    : +0.2400
+  Stability   (mean cos)    : 0.1931
+  Sparsity    (mean Gini)   : 0.6591
+  Band Localization:
+    Delta (0.5-4 Hz)      : 53.8%
+    Theta (4-8 Hz)        : 22.5%
+    Alpha (8-13 Hz)       : 17.0%
+    Beta  (13-30 Hz)      : 6.7%
+============================================================
