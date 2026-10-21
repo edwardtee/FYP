@@ -63,13 +63,23 @@ if __name__ == "__main__":
     # 2. Train Model
     trained_model = train_vgg16(vgg16_model, train_loader, val_loader, epochs=8, device=device)
 
+
     show_gradcam_example(
         trained_model,
         val_loader,
         device=device,
-        class_names=["Alert", "Drowsy"],
-        sample_index=0,
-        save_path="gradcam_example.png"
+        target_class=None,
+        sample_index=1,
+        save_path="Grad_Cam_Example_n1.png"
+    )
+
+    show_gradcam_example(
+        trained_model,
+        val_loader,
+        device=device,
+        target_class=None,
+        sample_index=2,
+        save_path="Grad_Cam_Example_n2.png"
     )
 
     # 3. Generate SHAP Visualizations

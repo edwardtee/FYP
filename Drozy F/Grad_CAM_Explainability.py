@@ -132,6 +132,7 @@ def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
     heatmap, predicted_class, probabilities = generate_gradcam(
         model, image, target_class=target_class, device=device
     )
+    explained_class = predicted_class if target_class is None else int(target_class)
 
     # Convert the 3-channel normalized tensor to a displayable grayscale image.
     # Averaging channels is appropriate here because the EEG channels are
@@ -150,8 +151,10 @@ def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
     axes[2].imshow(display_image, cmap="gray", origin="lower", aspect="auto")
     axes[2].imshow(heatmap, cmap="jet", alpha=0.45, origin="lower", aspect="auto")
     axes[2].set_title(
-        f"Prediction: {class_names[predicted_class]}\n"
-        f"Confidence: {probabilities[predicted_class]:.2%}"
+        f"Explained: {class_names[explained_class]}\n"
+        f"Prediction: {class_names[predicted_class]} "
+        f"({probabilities[predicted_class]:.2%})\n"
+        f"Explained score: {probabilities[explained_class]:.2%}"
     )
 
     for axis in axes:
