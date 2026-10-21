@@ -5,7 +5,12 @@ import random
 from torch.utils.data import DataLoader
 from sklearn.model_selection import StratifiedGroupKFold
 from Explainable_AI_Integration_using_SHAP import generate_shap_explanations
-from PyTorch_Dataset_And_VGG16_Model_Setup import DROZYSpectrogramDataset, build_vgg16_classifier, transform_pipeline, train_vgg16
+from PyTorch_Dataset_And_VGG16_Model_Setup import (
+    DROZYSpectrogramDataset,
+    build_small_cnn_classifier,
+    transform_pipeline,
+    train_vgg16,
+)
 from STFT_Spectrogram_Generation import load_drozy_dataset
 from SHAP_Analysis_And_Evaluation import run_shap_analysis
 from Grad_CAM_Explainability import show_gradcam_example
@@ -57,11 +62,14 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_set, batch_size=16, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=16, shuffle=False)
 
-    # 1. Build Model
-    vgg16_model = build_vgg16_classifier(num_classes=2, freeze_features=True)
+    # 1. Build compact model
+    # This model has far fewer parameters than VGG16 and should reduce
+    # overfitting on the subject-independent DROZY split.
+    model = build_small_cnn_classifier(num_classes=2, dropout=0.35)
 
     # 2. Train Model
-    trained_model = train_vgg16(vgg16_model, train_loader, val_loader, epochs=8, device=device)
+    trained_model = train_vgg16(model, train_loader, val_loader, epochs=15,
+                                lr=1e-3, device=device)
 
 
     show_gradcam_example(
@@ -70,7 +78,7 @@ if __name__ == "__main__":
         device=device,
         target_class=None,
         sample_index=3,
-        save_path="Grad_Cam_Example_n3_nperseg512.png"
+        save_path="Grad_Cam_Example_n3_CNN_nperseg512.png"
     )
 
     show_gradcam_example(
@@ -79,7 +87,7 @@ if __name__ == "__main__":
         device=device,
         target_class=None,
         sample_index=4,
-        save_path="Grad_Cam_Example_n4_nperseg512.png"
+        save_path="Grad_Cam_Example_n4_CNN_nperseg512.png"
     )
 
     show_gradcam_example(
@@ -88,7 +96,7 @@ if __name__ == "__main__":
         device=device,
         target_class=None,
         sample_index=5,
-        save_path="Grad_Cam_Example_n5_nperseg512.png"
+        save_path="Grad_Cam_Example_n5_CNN_nperseg512.png"
     )
 
     # 3. Generate SHAP Visualizations

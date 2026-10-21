@@ -56,6 +56,53 @@ def build_vgg16_classifier(num_classes=2, freeze_features=True):
     
     return model
 
+
+class SmallEEGCNN(nn.Module):
+    """Compact CNN for 224x224 single-channel Fz spectrograms replicated to RGB.
+
+    Adaptive pooling makes the classifier less dependent on the exact spatial
+    size of the spectrogram and keeps the parameter count much lower than VGG16.
+    """
+
+    def __init__(self, num_classes=2, dropout=0.35):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(16, 32, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(32, 64, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(64, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+        )
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(dropout),
+            nn.Linear(128, num_classes),
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.global_pool(x)
+        return self.classifier(x)
+
+
+def build_small_cnn_classifier(num_classes=2, dropout=0.35):
+    """Build the compact CNN used by the Fz-only execution pipeline."""
+    return SmallEEGCNN(num_classes=num_classes, dropout=dropout)
+
 def _dataset_labels(dataset):
     """Read labels without loading/transformation of every spectrogram."""
     if hasattr(dataset, "labels"):

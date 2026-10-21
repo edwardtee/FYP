@@ -17,14 +17,14 @@ from sklearn.model_selection import StratifiedGroupKFold
 
 from STFT_Spectrogram_Generation import load_drozy_dataset
 from PyTorch_Dataset_And_VGG16_Model_Setup import (
-    DROZYSpectrogramDataset, build_vgg16_classifier, transform_pipeline, train_vgg16,
+    DROZYSpectrogramDataset, build_small_cnn_classifier, build_vgg16_classifier, transform_pipeline, train_vgg16,
 )
 from SHAP_Analysis_And_Evaluation import classify_loader_full
 
 
 DATASET_ROOT = r"D:\FYP\DROZY\DROZY"
-OUTPUT_CSV = Path(r"D:\FYP\Drozy F\fz_only_nested_cv_results.csv")
-SUMMARY_CSV = Path(r"D:\FYP\Drozy F\fz_only_nested_cv_mean_sd.csv")
+OUTPUT_CSV = Path(r"D:\FYP\Drozy F\fz_only_nested_cv_results_CNN.csv")
+SUMMARY_CSV = Path(r"D:\FYP\Drozy F\fz_only_nested_cv_mean_sd_CNN.csv")
 SEED = 42
 N_OUTER_FOLDS = 5
 MODEL_CHANNELS = ("Fz",)
@@ -75,8 +75,17 @@ def main():
         val_loader = DataLoader(Subset(dataset, val_idx), batch_size=16, shuffle=False)
         test_loader = DataLoader(Subset(dataset, outer_test_idx), batch_size=16, shuffle=False)
 
-        model = build_vgg16_classifier(num_classes=2, freeze_features=True)
-        model = train_vgg16(model, train_loader, val_loader, epochs=8, device=device)
+        #model = build_vgg16_classifier(num_classes=2, freeze_features=True)
+        #model = train_vgg16(model, train_loader, val_loader, epochs=8, device=device)
+        model = build_small_cnn_classifier(num_classes=2, dropout=0.35)
+        model = train_vgg16(
+            model,
+            train_loader,
+            val_loader,
+            epochs=15,
+            lr=1e-3,
+            device=device
+        )
         metrics = classify_loader_full(model, test_loader, device=device)
         metrics["fold"] = fold
         metrics["test_subjects"] = ",".join(map(str, outer_test_subjects))
