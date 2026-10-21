@@ -8,6 +8,7 @@ from Explainable_AI_Integration_using_SHAP import generate_shap_explanations
 from PyTorch_Dataset_And_VGG16_Model_Setup import DROZYSpectrogramDataset, build_vgg16_classifier, transform_pipeline, train_vgg16
 from STFT_Spectrogram_Generation import load_drozy_dataset
 from SHAP_Analysis_And_Evaluation import run_shap_analysis
+from Grad_CAM_Explainability import show_gradcam_example
 
 SEED = 42
 MODEL_CHANNELS = ("Fz",)  # RGB order for the multichannel comparison
@@ -62,10 +63,19 @@ if __name__ == "__main__":
     # 2. Train Model
     trained_model = train_vgg16(vgg16_model, train_loader, val_loader, epochs=8, device=device)
 
+    show_gradcam_example(
+        trained_model,
+        val_loader,
+        device=device,
+        class_names=["Alert", "Drowsy"],
+        sample_index=0,
+        save_path="gradcam_example.png"
+    )
+
     # 3. Generate SHAP Visualizations
     #generate_shap_explanations(trained_model, train_loader, val_loader, device=device)
     # Fast, reproducible SHAP run for development.  Increase these only for
     # the final selected model after cross-validation is complete.
-    run_shap_analysis(trained_model, train_loader, val_loader, device=device,
+    '''run_shap_analysis(trained_model, train_loader, val_loader, device=device,
                       n_background=30, n_test=20, n_display=4,
-                      n_stability_reps=2, shap_nsamples=50)
+                      n_stability_reps=2, shap_nsamples=50)'''

@@ -47,6 +47,14 @@ def generate_gradcam(model, image, target_layer=None, target_class=None,
     was_training = model.training
     model.eval()
 
+    # VGG16 uses in-place ReLU operations. They can conflict with PyTorch's
+    # backward hooks because the hook output is treated as a view. Disable
+    # in-place behaviour only while computing Grad-CAM, then restore it.
+    relu_layers = [layer for layer in model.modules() if isinstance(layer, nn.ReLU)]
+    original_inplace = [layer.inplace for layer in relu_layers]
+    for layer in relu_layers:
+        layer.inplace = False
+
     if target_layer is None:
         # Use the final convolution, before the final ReLU, so the activation
         # map still has useful spatial information for the VGG16 classifier.
@@ -98,6 +106,8 @@ def generate_gradcam(model, image, target_layer=None, target_class=None,
         forward_handle.remove()
         backward_handle.remove()
         image.requires_grad_(False)
+        for layer, inplace in zip(relu_layers, original_inplace):
+            layer.inplace = inplace
         if was_training:
             model.train()
 
