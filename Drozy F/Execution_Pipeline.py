@@ -69,8 +69,8 @@ if __name__ == "__main__":
         val_loader,
         device=device,
         target_class=None,
-        sample_index=1,
-        save_path="Grad_Cam_Example_n1.png"
+        sample_index=3,
+        save_path="Grad_Cam_Example_n3_nperseg512.png"
     )
 
     show_gradcam_example(
@@ -78,8 +78,17 @@ if __name__ == "__main__":
         val_loader,
         device=device,
         target_class=None,
-        sample_index=2,
-        save_path="Grad_Cam_Example_n2.png"
+        sample_index=4,
+        save_path="Grad_Cam_Example_n4_nperseg512.png"
+    )
+
+    show_gradcam_example(
+        trained_model,
+        val_loader,
+        device=device,
+        target_class=None,
+        sample_index=5,
+        save_path="Grad_Cam_Example_n5_nperseg512.png"
     )
 
     # 3. Generate SHAP Visualizations
