@@ -16,9 +16,10 @@ from torch.utils.data import DataLoader
 
 from PyTorch_Dataset_And_VGG16_Model_Setup import (
     DROZYSpectrogramDataset,
-    build_small_cnn_classifier,
+    build_small_cnn_ordinal_classifier,
+    ordinal_logits_to_classes,
     transform_pipeline,
-    train_vgg16,
+    train_ordinal_model,
 )
 
 from VLA_VRW_CSV_Dataset import load_benchmark_split
@@ -31,6 +32,7 @@ CLASS_NAMES = ("Alert", "Transition", "Drowsy")
 MODEL_CHANNELS = ("Fz_Pz_uv",)
 CSV_DATASET_PATH = r"D:\FYP\VLA_VRW_CSV"
 RUN_EXPLAINABILITY = False
+USE_ORDINAL_MODEL = True
 
 
 def set_reproducible_seed(seed):
@@ -49,7 +51,11 @@ def evaluate_model(model, loader, device):
     with torch.no_grad():
         for images, batch_labels in loader:
             outputs = model(images.to(device))
-            predictions.extend(outputs.argmax(dim=1).cpu().numpy())
+            if USE_ORDINAL_MODEL:
+                batch_predictions = ordinal_logits_to_classes(outputs)
+            else:
+                batch_predictions = outputs.argmax(dim=1)
+            predictions.extend(batch_predictions.cpu().numpy())
             labels.extend(batch_labels.numpy())
 
     labels = np.asarray(labels)
@@ -103,18 +109,16 @@ if __name__ == "__main__":
     real_loader = DataLoader(real_dataset, batch_size=16, shuffle=False, num_workers=0)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = build_small_cnn_classifier(num_classes=NUM_CLASSES, dropout=0.35)
-    trained_model = train_vgg16(
+    model = build_small_cnn_ordinal_classifier(num_classes=NUM_CLASSES, dropout=0.35)
+    trained_model = train_ordinal_model(
         model,
         train_loader,
         val_loader,
+        num_classes=NUM_CLASSES,
         epochs=25,
         lr=3e-4,
         device=device,
         early_stopping_patience=5,
-        # Full inverse-frequency weighting over-predicted Drowsy in the first
-        # run. Square-root weighting is a less aggressive compromise.
-        class_weight_power=1.0,
     )
 
     # This is the only evaluation on the real condition.
@@ -122,27 +126,31 @@ if __name__ == "__main__":
 
     if RUN_EXPLAINABILITY:
         from Grad_CAM_Explainability import show_gradcam_example
-        from SHAP_Analysis_And_Evaluation import run_shap_analysis
 
         show_gradcam_example(
             trained_model,
             real_loader,
             device=device,
-            class_names=CLASS_NAMES,
-            target_class=2,
+            class_names=("PERCLOS >= 0.35", "PERCLOS > 0.70"),
+            target_class=1,
             sample_index=0,
             save_path="gradcam_real_drowsy.png",
         )
-        run_shap_analysis(
-            trained_model,
-            train_loader,
-            real_loader,
-            device=device,
-            n_background=30,
-            n_test=20,
-            n_display=4,
-            n_stability_reps=2,
-            shap_nsamples=50,
-            class_names=CLASS_NAMES,
-            quantitative_target_class=2,
-        )
+        if USE_ORDINAL_MODEL:
+            print("SHAP is disabled for ordinal output: explain one ordinal "
+                  "threshold at a time before using multiclass SHAP summaries.")
+        else:
+            from SHAP_Analysis_And_Evaluation import run_shap_analysis
+            run_shap_analysis(
+                trained_model,
+                train_loader,
+                real_loader,
+                device=device,
+                n_background=30,
+                n_test=20,
+                n_display=4,
+                n_stability_reps=2,
+                shap_nsamples=50,
+                class_names=CLASS_NAMES,
+                quantitative_target_class=2,
+            )

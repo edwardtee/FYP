@@ -103,6 +103,122 @@ def build_small_cnn_classifier(num_classes=2, dropout=0.35):
     """Build the compact CNN used by the Fz-only execution pipeline."""
     return SmallEEGCNN(num_classes=num_classes, dropout=dropout)
 
+
+def build_small_cnn_ordinal_classifier(num_classes=3, dropout=0.35):
+    """Build a cumulative ordinal classifier.
+
+    For K ordered classes, the head has K-1 outputs. For the three PERCLOS
+    classes these outputs represent PERCLOS >= 0.35 and PERCLOS > 0.70.
+    """
+    if num_classes < 2:
+        raise ValueError("Ordinal classification requires at least two classes")
+    return SmallEEGCNN(num_classes=num_classes - 1, dropout=dropout)
+
+
+def ordinal_targets(labels, num_classes=3):
+    """Convert class indices [0, ..., K-1] to cumulative binary targets."""
+    thresholds = torch.arange(num_classes - 1, device=labels.device)
+    return (labels.unsqueeze(1) > thresholds).float()
+
+
+def ordinal_logits_to_classes(logits, thresholds=(0.5, 0.5)):
+    """Convert cumulative ordinal probabilities to class indices using 2 thresholds.
+    
+    thresholds[0]: threshold for P(class >= 1) [Transition or Drowsy]
+    thresholds[1]: threshold for P(class >= 2) [Drowsy]
+    """
+    probabilities = torch.sigmoid(logits)
+    t = torch.as_tensor(thresholds, device=logits.device, dtype=probabilities.dtype)
+    return (probabilities >= t).sum(dim=1).long()
+
+
+def train_ordinal_model(model, train_loader, val_loader, num_classes=3,
+                        epochs=25, lr=3e-4, device="cuda",
+                        early_stopping_patience=5):
+    """Train a cumulative ordinal model with threshold-balanced BCE loss."""
+    model = model.to(device)
+    train_labels = _dataset_labels(train_loader.dataset)
+    if set(train_labels.tolist()) != set(range(num_classes)):
+        raise ValueError("Training split must contain every ordinal class")
+
+    # Each cumulative threshold has a different imbalance. Threshold 2 is
+    # positive only for Drowsy, so use a separate positive weight for it.
+    cumulative = np.stack([
+        train_labels >= threshold for threshold in range(1, num_classes)
+    ], axis=1)
+    positive = cumulative.sum(axis=0).astype(np.float64)
+    negative = cumulative.shape[0] - positive
+    pos_weight = torch.tensor(negative / np.maximum(positive, 1),
+                              dtype=torch.float32, device=device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    feature_params = [p for p in model.features.parameters() if p.requires_grad]
+    optimizer = torch.optim.Adam([
+        {"params": feature_params, "lr": lr * 0.1},
+        {"params": model.classifier.parameters(), "lr": lr},
+    ], weight_decay=1e-4)
+    print(f"Ordinal threshold positive counts: {positive.astype(int).tolist()}; "
+          f"pos weights: {pos_weight.detach().cpu().numpy().round(3).tolist()}")
+
+    best_balanced_acc = -float("inf")
+    best_epoch = 0
+    best_state = None
+    epochs_without_improvement = 0
+
+    for epoch in range(epochs):
+        model.train()
+        running_loss = 0.0
+        total = 0
+        correct = 0
+        for images, labels in train_loader:
+            images, labels = images.to(device), labels.to(device)
+            targets = ordinal_targets(labels, num_classes=num_classes)
+            optimizer.zero_grad()
+            logits = model(images)
+            loss = criterion(logits, targets)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item() * labels.size(0)
+            predictions = ordinal_logits_to_classes(logits.detach())
+            correct += (predictions == labels).sum().item()
+            total += labels.size(0)
+
+        model.eval()
+        val_predictions, val_labels = [], []
+        with torch.no_grad():
+            for images, labels in val_loader:
+                logits = model(images.to(device))
+                predictions = ordinal_logits_to_classes(logits)
+                val_predictions.extend(predictions.cpu().tolist())
+                val_labels.extend(labels.tolist())
+
+        per_class_recall = [
+            sum(p == y == class_id for p, y in zip(val_predictions, val_labels)) /
+            max(1, sum(y == class_id for y in val_labels))
+            for class_id in range(num_classes)
+        ]
+        val_balanced_acc = float(np.mean(per_class_recall))
+        val_acc = float(np.mean(np.asarray(val_predictions) == np.asarray(val_labels)))
+        print(f"Epoch {epoch + 1}/{epochs} - Loss: {running_loss / total:.4f} - "
+              f"Train Acc: {correct / total:.4f} - Val Acc: {val_acc:.4f} - "
+              f"Val Balanced Acc: {val_balanced_acc:.4f}")
+
+        if val_balanced_acc > best_balanced_acc:
+            best_balanced_acc = val_balanced_acc
+            best_epoch = epoch + 1
+            best_state = copy.deepcopy(model.state_dict())
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= early_stopping_patience:
+                print(f"Early stopping at epoch {epoch + 1}; restoring epoch "
+                      f"{best_epoch} (best validation balanced accuracy: "
+                      f"{best_balanced_acc:.4f}).")
+                break
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    return model
+
 def _dataset_labels(dataset):
     """Read labels without loading/transformation of every spectrogram."""
     if hasattr(dataset, "labels"):
