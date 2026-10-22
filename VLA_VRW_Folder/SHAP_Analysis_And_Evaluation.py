@@ -138,7 +138,7 @@ def verify_shap_structure(shap_values, num_classes, test_images_np,
     descriptive diagnostic only; it is not a validity criterion.
     """
     alert_maps  = _extract_shap_for_class(shap_values, 0, num_classes)
-    drowsy_maps = _extract_shap_for_class(shap_values, 1, num_classes)
+    drowsy_maps = _extract_shap_for_class(shap_values, min(2, num_classes - 1), num_classes)
     N      = len(test_images_np)
     N_plot = min(n_display, N) if n_display is not None else N
 
@@ -148,7 +148,7 @@ def verify_shap_structure(shap_values, num_classes, test_images_np,
     print("="*60)
 
     # --- Console stats for ALL N samples ---
-    class_names = ["Alert", "Drowsy"]
+    class_names = ["Alert", "Transition", "Drowsy"][:num_classes]
     for i in range(N):
         r, pval = pearsonr(alert_maps[i].flatten(), drowsy_maps[i].flatten())
         sign_str = ("anti-correlated" if r < -0.7 else "not strongly anti-correlated")
@@ -191,7 +191,9 @@ def verify_shap_structure(shap_values, num_classes, test_images_np,
         # ---- Drowsy attribution ----
         im2 = axes[i, 2].imshow(drowsy_maps[i], cmap="seismic", aspect="auto",
                                 origin="lower", vmin=-vmax_d, vmax=vmax_d)
-        axes[i, 2].set_title("Drowsy (class-1) Attribution", fontsize=8.5)
+        axes[i, 2].set_title(
+            f"{class_names[min(2, num_classes - 1)]} Attribution", fontsize=8.5
+        )
         cbar2 = fig.colorbar(im2, ax=axes[i, 2], fraction=0.046, pad=0.04)
         cbar2.ax.tick_params(labelsize=6)
 
@@ -241,7 +243,8 @@ def plot_band_attribution(shap_values, num_classes, test_images_np,
     N_plot     = min(n_display, N) if n_display is not None else N
     bands      = list(BAND_ROWS.items())   # [(name, (r0, r1)), ...]
     n_bands    = len(bands)
-    class_name = "Drowsy" if class_idx == 1 else "Alert"
+    class_names = ["Alert", "Transition", "Drowsy"][:num_classes]
+    class_name = class_names[class_idx]
 
     print("\n" + "="*60)
     print(f"  [2] PER-BAND ATTRIBUTION  (class: {class_name})")
@@ -250,8 +253,6 @@ def plot_band_attribution(shap_values, num_classes, test_images_np,
 
     freq_ticks  = [_freq_to_row(f) for f in [0.5, 4, 8, 13, 30]]
     freq_labels = ["0.5", "4", "8", "13", "30"]
-    class_names = ["Alert", "Drowsy"]
-
     # --- Console stats for ALL N samples ---
     all_band_energies = []
     for i in range(N):
@@ -327,6 +328,7 @@ def plot_band_attribution(shap_values, num_classes, test_images_np,
 
 def evaluate_shap_quantitative(model, test_batch, shap_values, num_classes,
                                 true_labels, probs, background_batch, device="cuda",
+                                target_class=None,
                                 top_k_frac=0.10, noise_std=0.05,
                                 n_stability_reps=5, shap_nsamples=50):
     """
@@ -375,11 +377,13 @@ def evaluate_shap_quantitative(model, test_batch, shap_values, num_classes,
     dict with keys: fidelity_auc_drop, stability_mean_cos,
                     sparsity_gini, band_localization
     """
-    class_names = ["Alert", "Drowsy"]
+    class_names = ["Alert", "Transition", "Drowsy"][:num_classes]
     results = {}
 
-    # Use drowsy (class-1) maps as primary subject for binary classifier
-    maps = _extract_shap_for_class(shap_values, 1, num_classes)  # (N, H, W)
+    # For VLA_VRW, use Drowsy (class-2) as the primary one-vs-rest target.
+    # The explicit parameter also allows Transition or Alert to be studied.
+    target_class = min(2, num_classes - 1) if target_class is None else int(target_class)
+    maps = _extract_shap_for_class(shap_values, target_class, num_classes)
 
     print("\n" + "="*60)
     print("  [3] QUANTITATIVE SHAP EVALUATION")
@@ -392,7 +396,7 @@ def evaluate_shap_quantitative(model, test_batch, shap_values, num_classes,
     model.eval()
     N, C, H, W = test_batch.shape
 
-    orig_scores = probs[:, 1]   # P(drowsy) for each sample
+    orig_scores = probs[:, target_class]
 
     occluded_scores = np.zeros(N)
     for i in range(N):
@@ -408,12 +412,13 @@ def evaluate_shap_quantitative(model, test_batch, shap_values, num_classes,
 
         with torch.no_grad():
             out = model(inp.unsqueeze(0).to(device))
-            occ_prob = torch.softmax(out, dim=1).cpu().numpy()[0, 1]
+            occ_prob = torch.softmax(out, dim=1).cpu().numpy()[0, target_class]
         occluded_scores[i] = occ_prob
 
     try:
-        auc_orig = roc_auc_score(true_labels, orig_scores)
-        auc_occ  = roc_auc_score(true_labels, occluded_scores)
+        binary_target = (true_labels == target_class).astype(np.int8)
+        auc_orig = roc_auc_score(binary_target, orig_scores)
+        auc_occ  = roc_auc_score(binary_target, occluded_scores)
         auc_drop = auc_orig - auc_occ
     except ValueError:
         auc_orig = auc_occ = auc_drop = float("nan")
@@ -443,7 +448,7 @@ def evaluate_shap_quantitative(model, test_batch, shap_values, num_classes,
             test_batch[i].unsqueeze(0).to(device),
             nsamples=shap_nsamples, rseed=42
         )
-        orig_map = _extract_shap_for_class(original_sv, 1, num_classes)[0]
+        orig_map = _extract_shap_for_class(original_sv, target_class, num_classes)[0]
         sims_i   = []
         for _ in range(n_stability_reps):
             noisy_inp = (test_batch[i] + noise_std * torch.randn_like(test_batch[i])).unsqueeze(0)
@@ -452,7 +457,7 @@ def evaluate_shap_quantitative(model, test_batch, shap_values, num_classes,
             noisy_sv = explainer_bg.shap_values(
                 noisy_inp.to(device), nsamples=shap_nsamples, rseed=42
             )
-            noisy_map = _extract_shap_for_class(noisy_sv, 1, num_classes)[0]  # (H, W)
+            noisy_map = _extract_shap_for_class(noisy_sv, target_class, num_classes)[0]
             sims_i.append(_cosine_sim(orig_map, noisy_map))
         mean_sim = float(np.mean(sims_i))
         cos_sims.append(mean_sim)
@@ -588,7 +593,8 @@ def _plot_quantitative_summary(results, gini_vals, cos_sims,
 # 4.  Classification Metrics Report
 # ---------------------------------------------------------------------------
 
-def classify_and_report(model, test_batch, true_labels, num_classes, device="cuda"):
+def classify_and_report(model, test_batch, true_labels, num_classes, device="cuda",
+                        class_names=None):
     """
     Runs the model on *test_batch* and reports:
       - Per-class Precision, Recall, F1-score
@@ -607,7 +613,9 @@ def classify_and_report(model, test_batch, true_labels, num_classes, device="cud
     -------
     dict with keys: precision, recall, f1, roc_auc, confusion_matrix
     """
-    class_names = ["Alert", "Drowsy"]
+    class_names = list(class_names or ["Alert", "Transition", "Drowsy"][:num_classes])
+    if len(class_names) != num_classes:
+        raise ValueError("class_names must have one name per model output class")
 
     model.eval()
     with torch.no_grad():
@@ -637,7 +645,7 @@ def classify_and_report(model, test_batch, true_labels, num_classes, device="cud
     # ------------------------------------------------------------------
     # Confusion Matrix
     # ------------------------------------------------------------------
-    cm = confusion_matrix(true_labels, pred_labels)
+    cm = confusion_matrix(true_labels, pred_labels, labels=np.arange(num_classes))
 
     # ------------------------------------------------------------------
     # Console report
@@ -652,11 +660,12 @@ def classify_and_report(model, test_batch, true_labels, num_classes, device="cud
     print(f"  ROC-AUC           : {roc_auc:.4f}")
     print("\n  Per-class report:")
     print(classification_report(true_labels, pred_labels,
+                                labels=np.arange(num_classes),
                                 target_names=class_names, zero_division=0))
     print("  Confusion Matrix:")
-    print(f"                Pred Alert  Pred Drowsy")
+    print("  Predicted classes:", " | ".join(class_names))
     for r_idx, row in enumerate(cm):
-        print(f"  True {class_names[r_idx]:6s}  :  {row[0]:^9d}  {row[1]:^10d}")
+        print(f"  True {class_names[r_idx]:12s}: {row.tolist()}")
 
     # ------------------------------------------------------------------
     # Figure: Confusion Matrix heatmap
@@ -713,7 +722,7 @@ def classify_and_report(model, test_batch, true_labels, num_classes, device="cud
     }
 
 
-def classify_loader_full(model, test_loader, device="cuda"):
+def classify_loader_full(model, test_loader, device="cuda", class_names=None):
     """Evaluate every held-out window in batches; never report a SHAP subset as accuracy."""
     model.eval()
     labels, probabilities = [], []
@@ -725,18 +734,22 @@ def classify_loader_full(model, test_loader, device="cuda"):
     y_true = np.concatenate(labels)
     probs = np.concatenate(probabilities)
     y_pred = np.argmax(probs, axis=1)
-    precision = precision_score(y_true, y_pred, average="binary", zero_division=0)
-    recall = recall_score(y_true, y_pred, average="binary", zero_division=0)
-    f1 = f1_score(y_true, y_pred, average="binary", zero_division=0)
+    num_classes = probs.shape[1]
+    class_names = list(class_names or ["Alert", "Transition", "Drowsy"][:num_classes])
+    if len(class_names) != num_classes:
+        raise ValueError("class_names must have one name per model output class")
+    precision = precision_score(y_true, y_pred, average="macro", zero_division=0)
+    recall = recall_score(y_true, y_pred, average="macro", zero_division=0)
+    f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
     accuracy = accuracy_score(y_true, y_pred)
     balanced_accuracy = balanced_accuracy_score(y_true, y_pred)
-    alert_recall = recall_score(y_true, y_pred, pos_label=0, zero_division=0)
+    alert_recall = recall_score(y_true, y_pred, labels=[0], average=None,
+                                zero_division=0)[0]
     try:
-        roc_auc = roc_auc_score(y_true, probs[:, 1])
+        roc_auc = roc_auc_score(y_true, probs, multi_class="ovr", average="macro")
     except ValueError:
         roc_auc = float("nan")
-    cm = confusion_matrix(y_true, y_pred)
-    class_names = ["Alert", "Drowsy"]
+    cm = confusion_matrix(y_true, y_pred, labels=np.arange(num_classes))
     print("\n" + "=" * 60)
     print("  HELD-OUT SUBJECT CLASSIFICATION REPORT (ALL WINDOWS)")
     print("=" * 60)
@@ -748,11 +761,12 @@ def classify_loader_full(model, test_loader, device="cuda"):
     print(f"  F1-Score          : {f1:.4f}")
     print(f"  ROC-AUC           : {roc_auc:.4f}")
     print(classification_report(y_true, y_pred,
-                                target_names=["Alert", "Drowsy"], zero_division=0))
+                                labels=np.arange(num_classes),
+                                target_names=class_names, zero_division=0))
     print("  Confusion Matrix:")
-    print(f"                Pred Alert  Pred Drowsy")
+    print("  Predicted classes:", " | ".join(class_names))
     for r_idx, row in enumerate(cm):
-        print(f"  True {class_names[r_idx]:6s}  :  {row[0]:^9d}  {row[1]:^10d}")
+        print(f"  True {class_names[r_idx]:12s}: {row.tolist()}")
 
     # ------------------------------------------------------------------
     # Figure: Confusion Matrix Heatmap & Metric Bar Chart
@@ -814,7 +828,8 @@ def classify_loader_full(model, test_loader, device="cuda"):
 def run_shap_analysis(model, background_loader, test_loader, device="cuda",
                       n_background=100, n_test=50, n_display=4,
                       top_k_frac=0.10, noise_std=0.05, n_stability_reps=5,
-                      shap_nsamples=50):
+                      shap_nsamples=50, class_names=None,
+                      quantitative_target_class=None):
     """
     End-to-end SHAP analysis pipeline.  Drop-in replacement for
     generate_shap_explanations() in Execution_Pipeline.py.
@@ -834,6 +849,7 @@ def run_shap_analysis(model, background_loader, test_loader, device="cuda",
     shap_nsamples      : GradientExplainer Monte-Carlo samples per explanation
     """
     model.eval()
+    class_names = tuple(class_names or ("Alert", "Transition", "Drowsy"))
     for param in model.parameters():
         param.requires_grad = True
 
@@ -936,7 +952,7 @@ def run_shap_analysis(model, background_loader, test_loader, device="cuda",
     # ====================================================================
     plot_band_attribution(shap_values_all, num_classes, test_images_all_np,
                           true_labels_all, pred_labels_all,
-                          class_idx=1, n_display=n_display)
+                          class_idx=min(2, num_classes - 1), n_display=n_display)
 
     # ====================================================================
     # Section 3 - Quantitative Evaluation  (FULL test set)
@@ -944,6 +960,7 @@ def run_shap_analysis(model, background_loader, test_loader, device="cuda",
     metrics = evaluate_shap_quantitative(
         model, test_batch_all, shap_values_all, num_classes,
         true_labels_all, probs_all, background_batch=bg_batch, device=device,
+        target_class=quantitative_target_class,
         top_k_frac=top_k_frac,
         noise_std=noise_std,
         n_stability_reps=n_stability_reps,
@@ -953,7 +970,9 @@ def run_shap_analysis(model, background_loader, test_loader, device="cuda",
     # ====================================================================
     # Section 4 - Classification Metrics Report  (FULL test set)
     # ====================================================================
-    clf_metrics = classify_loader_full(model, test_loader, device=device)
+    clf_metrics = classify_loader_full(
+        model, test_loader, device=device, class_names=class_names
+    )
 
     # ------------------------------------------------------------------
     # Final summary

@@ -122,7 +122,9 @@ def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
     the heatmap remains valid, but the colors are intended for localization,
     not for recovering the original spectrogram color scale.
     """
-    class_names = class_names or ["Alert", "Drowsy"]
+    class_names = list(class_names or ["Alert", "Transition", "Drowsy"])
+    if len(class_names) != int(model.classifier[-1].out_features):
+        raise ValueError("class_names must have one name per model output class")
     images, labels = next(iter(data_loader))
     if sample_index >= len(images):
         raise IndexError(f"sample_index must be between 0 and {len(images) - 1}")

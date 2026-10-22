@@ -113,15 +113,18 @@ def _dataset_labels(dataset):
 
 
 def train_vgg16(model, train_loader, val_loader, epochs=8, lr=1e-4, device='cuda',
-                early_stopping_patience=2):
+                early_stopping_patience=2, class_weight_power=1.0):
     model = model.to(device)
     train_labels = _dataset_labels(train_loader.dataset)
-    counts = np.bincount(train_labels, minlength=2)
+    num_classes = int(model.classifier[-1].out_features)
+    counts = np.bincount(train_labels, minlength=num_classes)
     if np.any(counts == 0):
-        raise ValueError("Both classes must be present in the training fold.")
-    # Counteract the 2:1 class imbalance so Drowsy recall is not sacrificed
-    # simply by predicting the majority class.
-    class_weights = len(train_labels) / (2.0 * counts)
+        missing = np.flatnonzero(counts == 0).tolist()
+        raise ValueError(f"Training split is missing class(es): {missing}")
+    # Counteract class imbalance so the model does not simply predict the
+    # majority PERCLOS class.
+    inverse_frequency = len(train_labels) / (num_classes * counts)
+    class_weights = inverse_frequency ** class_weight_power
     criterion = nn.CrossEntropyLoss(
         weight=torch.tensor(class_weights, dtype=torch.float32, device=device)
     )
@@ -130,8 +133,8 @@ def train_vgg16(model, train_loader, val_loader, epochs=8, lr=1e-4, device='cuda
         {"params": feature_params, "lr": lr * 0.1},
         {"params": model.classifier.parameters(), "lr": lr},
     ], weight_decay=1e-4)
-    print(f"Training class counts: Alert={counts[0]}, Drowsy={counts[1]}; "
-          f"loss weights: Alert={class_weights[0]:.3f}, Drowsy={class_weights[1]:.3f}")
+    print(f"Training class counts: {counts.tolist()}; "
+          f"loss weights: {class_weights.round(3).tolist()}")
     best_balanced_acc = -float("inf")
     best_epoch = 0
     best_state = None
@@ -179,7 +182,7 @@ def train_vgg16(model, train_loader, val_loader, epochs=8, lr=1e-4, device='cuda
         per_class_recall = [
             sum(p == y == class_id for p, y in zip(val_predictions, val_labels)) /
             max(1, sum(y == class_id for y in val_labels))
-            for class_id in range(2)
+            for class_id in range(num_classes)
         ]
         balanced_acc = float(np.mean(per_class_recall))
         print(f"Epoch {epoch+1}/{epochs} - Loss: {epoch_loss:.4f} - "
