@@ -63,6 +63,13 @@ def load_csv_recording(eeg_csv, perclos_csv, channels=DEFAULT_CHANNELS):
         channel: eeg_frame[channel].to_numpy(dtype=np.float64)
         for channel in channels
     }
+    # Remove recording-specific DC offset and amplitude scale before the STFT.
+    # This makes the lab-to-real comparison less sensitive to electrode
+    # impedance, subject amplitude, and recording-gain differences.
+    for channel, signal in signals.items():
+        center = np.median(signal)
+        scale = np.std(signal)
+        signals[channel] = (signal - center) / max(scale, 1e-8)
 
     images, labels, values, metadata = [], [], [], []
     for row in perclos_rows:
