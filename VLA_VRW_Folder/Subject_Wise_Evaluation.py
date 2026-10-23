@@ -105,6 +105,8 @@ if __name__ == "__main__":
     print(f"Lab samples: {X_lab.shape}; labels: {y_lab.shape}")
     print(f"Real samples: {X_real.shape}; labels: {y_real.shape}")
     print(f"PERCLOS classes: {CLASS_NAMES}")
+    print("Lab class counts:", np.bincount(y_lab, minlength=NUM_CLASSES).tolist())
+    print("Real class counts:", np.bincount(y_real, minlength=NUM_CLASSES).tolist())
 
     # Subject-independent validation within lab only. Real remains untouched
     # until the final robustness/generalizability evaluation.

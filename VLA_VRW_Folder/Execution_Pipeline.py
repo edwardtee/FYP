@@ -16,9 +16,11 @@ from torch.utils.data import DataLoader
 
 from PyTorch_Dataset_And_VGG16_Model_Setup import (
     DROZYSpectrogramDataset,
+    build_small_cnn_classifier,
     build_small_cnn_ordinal_classifier,
     ordinal_logits_to_classes,
     transform_pipeline,
+    train_vgg16,
     train_ordinal_model,
 )
 
@@ -32,6 +34,9 @@ CLASS_NAMES = ("Alert", "Transition", "Drowsy")
 MODEL_CHANNELS = ("Fz_Pz_uv",)
 CSV_DATASET_PATH = r"D:\FYP\VLA_VRW_CSV"
 RUN_EXPLAINABILITY = False
+# First controlled improvement experiment: ordinary three-class CNN with
+# inverse-frequency weighted cross-entropy.  The ordinal model remains below
+# for comparison by changing this flag and the training block.
 USE_ORDINAL_MODEL = True
 
 
@@ -85,6 +90,8 @@ if __name__ == "__main__":
     print(f"Lab samples: {X_lab.shape}; labels: {y_lab.shape}")
     print(f"Real samples: {X_real.shape}; labels: {y_real.shape}")
     print(f"PERCLOS classes: {CLASS_NAMES}")
+    print("Lab class counts:", np.bincount(y_lab, minlength=NUM_CLASSES).tolist())
+    print("Real class counts:", np.bincount(y_real, minlength=NUM_CLASSES).tolist())
 
     # Subject-independent validation within lab only. Real remains untouched
     # until the final robustness/generalizability evaluation.
@@ -109,17 +116,18 @@ if __name__ == "__main__":
     real_loader = DataLoader(real_dataset, batch_size=16, shuffle=False, num_workers=0)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = build_small_cnn_ordinal_classifier(num_classes=NUM_CLASSES, dropout=0.35)
-    trained_model = train_ordinal_model(
-        model,
-        train_loader,
-        val_loader,
-        num_classes=NUM_CLASSES,
-        epochs=25,
-        lr=3e-4,
-        device=device,
-        early_stopping_patience=5,
-    )
+    if USE_ORDINAL_MODEL:
+        model = build_small_cnn_ordinal_classifier(num_classes=NUM_CLASSES, dropout=0.35)
+        trained_model = train_ordinal_model(
+            model, train_loader, val_loader, num_classes=NUM_CLASSES,
+            epochs=25, lr=3e-4, device=device, early_stopping_patience=5,
+        )
+    else:
+        model = build_small_cnn_classifier(num_classes=NUM_CLASSES, dropout=0.35)
+        trained_model = train_vgg16(
+            model, train_loader, val_loader, epochs=25, lr=3e-4,
+            device=device, early_stopping_patience=5, class_weight_power=1.0,
+        )
 
     # This is the only evaluation on the real condition.
     evaluate_model(trained_model, real_loader, device)
