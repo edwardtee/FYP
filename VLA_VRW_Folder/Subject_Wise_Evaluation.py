@@ -32,6 +32,7 @@ CLASS_NAMES = ("Alert", "Transition", "Drowsy")
 MODEL_CHANNELS = ("Fz_Pz_uv",)
 CSV_DATASET_PATH = r"D:\FYP\VLA_VRW_CSV"
 RUN_EXPLAINABILITY = False
+SMOOTHING_CANDIDATES = (1, 3, 5)
 
 
 def set_reproducible_seed(seed):
@@ -44,28 +45,64 @@ def set_reproducible_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 
-def evaluate_model(model, loader, device, thresholds=(0.5, 0.5), prefix="Evaluation"):
+def _smooth_scores(scores, metadata, window_size=1):
+    """Average cumulative ordinal scores within each subject's timeline."""
+    if window_size <= 1:
+        return scores
+    if window_size % 2 == 0:
+        raise ValueError("window_size must be odd")
+    if len(scores) != len(metadata):
+        raise ValueError("metadata length must match evaluation samples")
+
+    smoothed = np.empty_like(scores)
+    half = window_size // 2
+    groups = {}
+    for index, item in enumerate(metadata):
+        key = (item["condition"], item["subject_id"])
+        groups.setdefault(key, []).append(index)
+
+    for indices in groups.values():
+        indices.sort(key=lambda index: metadata[index]["window_index"])
+        for position, index in enumerate(indices):
+            center_window = metadata[index]["window_index"]
+            selected = []
+            for candidate_position in range(
+                max(0, position - half), min(len(indices), position + half + 1)
+            ):
+                candidate = indices[candidate_position]
+                candidate_window = metadata[candidate]["window_index"]
+                if abs(candidate_window - center_window) <= half:
+                    selected.append(candidate)
+            smoothed[index] = scores[selected].mean(axis=0)
+    return smoothed
+
+
+def evaluate_model(model, loader, metadata, device, thresholds=(0.5, 0.5),
+                   prefix="Evaluation", smooth_windows=1, report=True):
     model.eval()
-    predictions, labels = [], []
+    scores, labels = [], []
     with torch.no_grad():
         for images, batch_labels in loader:
             outputs = model(images.to(device))
-            predictions.extend(ordinal_logits_to_classes(outputs, thresholds=thresholds).cpu().numpy())
+            scores.extend(torch.sigmoid(outputs).cpu().numpy())
             labels.extend(batch_labels.numpy())
 
     labels = np.asarray(labels)
-    predictions = np.asarray(predictions)
-    print(f"\n{prefix}")
-    print(classification_report(
-        labels,
-        predictions,
-        labels=np.arange(NUM_CLASSES),
-        target_names=CLASS_NAMES,
-        zero_division=0,
-    ))
-    print("Balanced accuracy:", f"{balanced_accuracy_score(labels, predictions):.4f}")
-    print("Confusion matrix [rows=true, columns=predicted]:")
-    print(confusion_matrix(labels, predictions, labels=np.arange(NUM_CLASSES)))
+    scores = _smooth_scores(np.asarray(scores), metadata, window_size=smooth_windows)
+    threshold_tensor = np.asarray(thresholds, dtype=np.float32)
+    predictions = (scores >= threshold_tensor).sum(axis=1).astype(int)
+    if report:
+        print(f"\n{prefix}")
+        print(classification_report(
+            labels,
+            predictions,
+            labels=np.arange(NUM_CLASSES),
+            target_names=CLASS_NAMES,
+            zero_division=0,
+        ))
+        print("Balanced accuracy:", f"{balanced_accuracy_score(labels, predictions):.4f}")
+        print("Confusion matrix [rows=true, columns=predicted]:")
+        print(confusion_matrix(labels, predictions, labels=np.arange(NUM_CLASSES)))
     return labels, predictions
 
 def find_optimal_ordinal_thresholds(model, val_loader, device):
@@ -122,6 +159,7 @@ if __name__ == "__main__":
 
     fold_results_lab = []
     fold_results_real = []
+    selected_windows_by_fold = []
 
     # --- Borrowed from Cross_Validate_Fz_Only.py ---
     for fold, (train_idx, val_idx) in enumerate(split.split(X_lab, y_lab, groups=lab_groups), start=1):
@@ -136,6 +174,7 @@ if __name__ == "__main__":
 
         train_loader = DataLoader(Subset(lab_dataset, train_idx), batch_size=16, shuffle=True)
         val_loader = DataLoader(Subset(lab_dataset, val_idx), batch_size=16, shuffle=False)
+        val_metadata = [metadata_lab[index] for index in val_idx]
 
         model = build_small_cnn_ordinal_classifier(num_classes=NUM_CLASSES, dropout=0.35)
         trained_model = train_ordinal_model(
@@ -149,34 +188,64 @@ if __name__ == "__main__":
             early_stopping_patience=5,
         )
 
-        '''# 2. Tune decision thresholds strictly on Lab Validation data
-        best_t, val_bacc = find_optimal_ordinal_thresholds(trained_model, val_loader, device)
-        print(f"Optimal thresholds for Fold {fold}: T1={best_t[0]}, T2={best_t[1]} (Val BAcc: {val_bacc:.4f})")
-        # 3. Evaluate Lab Validation using optimal thresholds
-        y_val_true, y_val_pred = evaluate_model(
-            trained_model, val_loader, device, 
-            thresholds=best_t, 
-            prefix=f"Fold {fold} Lab Val"
-        )
-        # 4. Evaluate Held-out Real Test using the SAME optimal thresholds
-        y_real_true, y_real_pred = evaluate_model(
-            trained_model, real_loader, device, 
-            thresholds=best_t, 
-            prefix=f"Fold {fold} Real Test"
-        )'''
+        # Select temporal context strictly from this fold's lab validation
+        # subjects. The real set is not consulted during model selection.
+        validation_scores = {}
+        for smoothing_windows in SMOOTHING_CANDIDATES:
+            y_val_candidate, y_val_candidate_pred = evaluate_model(
+                trained_model,
+                val_loader,
+                val_metadata,
+                device,
+                thresholds=(0.5, 0.5),
+                smooth_windows=smoothing_windows,
+                report=False,
+            )
+            validation_scores[smoothing_windows] = balanced_accuracy_score(
+                y_val_candidate, y_val_candidate_pred
+            )
 
-        # Record balanced accuracy for this fold
-        # 1. Evaluate on in-domain Lab validation subjects
-        y_val_true, y_val_pred = evaluate_model(trained_model, val_loader, device, prefix=f"Fold {fold} Lab Val")        
+        selected_smoothing_windows = max(
+            validation_scores,
+            key=lambda windows: (validation_scores[windows], -windows),
+        )
+        print("Validation smoothing scores:", {
+            windows: round(score, 4)
+            for windows, score in validation_scores.items()
+        })
+        print(f"Selected smoothing length: {selected_smoothing_windows} windows")
+        selected_windows_by_fold.append(selected_smoothing_windows)
+
+        # Record validation performance using the selected setting.
+        y_val_true, y_val_pred = evaluate_model(
+            trained_model,
+            val_loader,
+            val_metadata,
+            device,
+            thresholds=(0.5, 0.5),
+            prefix=f"Fold {fold} Lab Val ({selected_smoothing_windows}-window smoothing)",
+            smooth_windows=selected_smoothing_windows,
+        )
         fold_results_lab.append(balanced_accuracy_score(y_val_true, y_val_pred))
-        # 2. Evaluate on out-of-domain Real dataset
-        y_real_true, y_real_pred = evaluate_model(trained_model, real_loader, device, prefix=f"Fold {fold} Real Test")
+
+        # Evaluate held-out real data using the fold-specific choice made on
+        # lab validation only.
+        y_real_true, y_real_pred = evaluate_model(
+            trained_model,
+            real_loader,
+            metadata_real,
+            device,
+            thresholds=(0.5, 0.5),
+            prefix=f"Fold {fold} Real Test ({selected_smoothing_windows}-window smoothing)",
+            smooth_windows=selected_smoothing_windows,
+        )
         fold_results_real.append(balanced_accuracy_score(y_real_true, y_real_pred))
 
     # Summary statistics across all 5 folds:
     print("\n" + "=" * 60)
     print(f"Lab Val Balanced Acc:  {np.mean(fold_results_lab):.4f} +/- {np.std(fold_results_lab):.4f}")
     print(f"Real Held-out Balanced Acc: {np.mean(fold_results_real):.4f} +/- {np.std(fold_results_real):.4f}")
+    print(f"Selected smoothing windows by fold: {selected_windows_by_fold}")
 
     if RUN_EXPLAINABILITY:
         from Grad_CAM_Explainability import show_gradcam_example
