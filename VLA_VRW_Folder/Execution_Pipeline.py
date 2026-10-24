@@ -38,7 +38,7 @@ RUN_EXPLAINABILITY = False
 # inverse-frequency weighted cross-entropy.  The ordinal model remains below
 # for comparison by changing this flag and the training block.
 USE_ORDINAL_MODEL = True
-TEMPORAL_SMOOTHING_WINDOWS = 3
+SMOOTHING_CANDIDATES = (1, 3, 5)
 
 
 def set_reproducible_seed(seed):
@@ -160,6 +160,7 @@ if __name__ == "__main__":
     real_dataset = DROZYSpectrogramDataset(X_real, y_real, transform=transform_pipeline)
     train_set = torch.utils.data.Subset(lab_dataset, train_idx)
     val_set = torch.utils.data.Subset(lab_dataset, val_idx)
+    val_metadata = [metadata_lab[index] for index in val_idx]
 
     train_loader = DataLoader(train_set, batch_size=16, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_set, batch_size=16, shuffle=False, num_workers=0)
@@ -179,8 +180,32 @@ if __name__ == "__main__":
             device=device, early_stopping_patience=5, class_weight_power=1.0,
         )
 
-    # Compare isolated-window predictions with three-window temporal
-    # probability smoothing. The real set remains completely held out.
+    # Select the smoothing length using lab validation data only. The real set
+    # remains completely held out until this choice has been made.
+    print("\nSelecting temporal smoothing length on lab validation data")
+    validation_scores = {}
+    for smoothing_windows in SMOOTHING_CANDIDATES:
+        val_labels, val_predictions = evaluate_model(
+            trained_model, val_loader, val_metadata, device,
+            prefix=f"Lab validation ({smoothing_windows}-window smoothing)",
+            smooth_windows=smoothing_windows,
+        )
+        validation_scores[smoothing_windows] = balanced_accuracy_score(
+            val_labels, val_predictions
+        )
+
+    selected_smoothing_windows = max(
+        validation_scores,
+        key=lambda windows: (validation_scores[windows], -windows),
+    )
+    print("Validation smoothing scores:", {
+        windows: round(score, 4)
+        for windows, score in validation_scores.items()
+    })
+    print(f"Selected smoothing length: {selected_smoothing_windows} windows")
+
+    # Report the unsmoothed baseline and then evaluate the real set once using
+    # the smoothing length selected without looking at real labels.
     evaluate_model(
         trained_model, real_loader, metadata_real, device,
         prefix="Held-out real-condition evaluation (single windows)",
@@ -188,8 +213,9 @@ if __name__ == "__main__":
     )
     evaluate_model(
         trained_model, real_loader, metadata_real, device,
-        prefix="Held-out real-condition evaluation (3-window smoothing)",
-        smooth_windows=TEMPORAL_SMOOTHING_WINDOWS,
+        prefix=("Held-out real-condition evaluation "
+                f"({selected_smoothing_windows}-window smoothing)"),
+        smooth_windows=selected_smoothing_windows,
     )
 
     if RUN_EXPLAINABILITY:
