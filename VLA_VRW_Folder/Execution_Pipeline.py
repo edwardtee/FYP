@@ -38,6 +38,7 @@ RUN_EXPLAINABILITY = False
 # inverse-frequency weighted cross-entropy.  The ordinal model remains below
 # for comparison by changing this flag and the training block.
 USE_ORDINAL_MODEL = True
+TEMPORAL_SMOOTHING_WINDOWS = 3
 
 
 def set_reproducible_seed(seed):
@@ -50,22 +51,71 @@ def set_reproducible_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 
-def evaluate_model(model, loader, device):
+def _model_scores(outputs):
+    """Return scores that preserve the model's original decision rule."""
+    if not USE_ORDINAL_MODEL:
+        return torch.softmax(outputs, dim=1)
+
+    # Ordinal outputs are cumulative probabilities:
+    # p1 = P(class >= Transition), p2 = P(class >= Drowsy).
+    return torch.sigmoid(outputs)
+
+
+def _smooth_scores(scores, metadata, window_size=3):
+    """Average consecutive windows within each subject only.
+
+    Samples from different subjects or gaps in window_index are never mixed.
+    A centered window is used, with a shorter window at recording boundaries.
+    """
+    if window_size <= 1:
+        return scores
+    if window_size % 2 == 0:
+        raise ValueError("window_size must be odd")
+
+    smoothed = np.empty_like(scores)
+    half = window_size // 2
+    groups = {}
+    for index, item in enumerate(metadata):
+        key = (item["condition"], item["subject_id"])
+        groups.setdefault(key, []).append(index)
+
+    for indices in groups.values():
+        indices.sort(key=lambda index: metadata[index]["window_index"])
+        for position, index in enumerate(indices):
+            selected = []
+            center_window = metadata[index]["window_index"]
+            for candidate_position in range(
+                max(0, position - half), min(len(indices), position + half + 1)
+            ):
+                candidate = indices[candidate_position]
+                candidate_window = metadata[candidate]["window_index"]
+                if abs(candidate_window - center_window) <= half:
+                    selected.append(candidate)
+            smoothed[index] = scores[selected].mean(axis=0)
+    return smoothed
+
+
+def evaluate_model(model, loader, metadata, device, prefix, smooth_windows=1):
     model.eval()
-    predictions, labels = [], []
+    scores, labels = [], []
     with torch.no_grad():
         for images, batch_labels in loader:
             outputs = model(images.to(device))
-            if USE_ORDINAL_MODEL:
-                batch_predictions = ordinal_logits_to_classes(outputs)
-            else:
-                batch_predictions = outputs.argmax(dim=1)
-            predictions.extend(batch_predictions.cpu().numpy())
+            scores.extend(_model_scores(outputs).cpu().numpy())
             labels.extend(batch_labels.numpy())
 
     labels = np.asarray(labels)
-    predictions = np.asarray(predictions)
-    print("\nHeld-out real-condition evaluation")
+    scores = np.asarray(scores)
+    if len(metadata) != len(scores):
+        raise ValueError("metadata length must match evaluation samples")
+    scores = _smooth_scores(
+        scores, metadata, window_size=smooth_windows
+    )
+    if USE_ORDINAL_MODEL:
+        predictions = (scores >= 0.5).sum(axis=1).astype(int)
+    else:
+        predictions = scores.argmax(axis=1)
+    print(f"\n{prefix}")
     print(classification_report(
         labels,
         predictions,
@@ -129,8 +179,18 @@ if __name__ == "__main__":
             device=device, early_stopping_patience=5, class_weight_power=1.0,
         )
 
-    # This is the only evaluation on the real condition.
-    evaluate_model(trained_model, real_loader, device)
+    # Compare isolated-window predictions with three-window temporal
+    # probability smoothing. The real set remains completely held out.
+    evaluate_model(
+        trained_model, real_loader, metadata_real, device,
+        prefix="Held-out real-condition evaluation (single windows)",
+        smooth_windows=1,
+    )
+    evaluate_model(
+        trained_model, real_loader, metadata_real, device,
+        prefix="Held-out real-condition evaluation (3-window smoothing)",
+        smooth_windows=TEMPORAL_SMOOTHING_WINDOWS,
+    )
 
     if RUN_EXPLAINABILITY:
         from Grad_CAM_Explainability import show_gradcam_example

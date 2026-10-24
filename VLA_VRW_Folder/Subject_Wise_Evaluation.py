@@ -149,7 +149,7 @@ if __name__ == "__main__":
             early_stopping_patience=5,
         )
 
-        # 2. Tune decision thresholds strictly on Lab Validation data
+        '''# 2. Tune decision thresholds strictly on Lab Validation data
         best_t, val_bacc = find_optimal_ordinal_thresholds(trained_model, val_loader, device)
         print(f"Optimal thresholds for Fold {fold}: T1={best_t[0]}, T2={best_t[1]} (Val BAcc: {val_bacc:.4f})")
         # 3. Evaluate Lab Validation using optimal thresholds
@@ -163,14 +163,14 @@ if __name__ == "__main__":
             trained_model, real_loader, device, 
             thresholds=best_t, 
             prefix=f"Fold {fold} Real Test"
-        )
+        )'''
 
         # Record balanced accuracy for this fold
         # 1. Evaluate on in-domain Lab validation subjects
-        #y_val_true, y_val_pred = evaluate_model(trained_model, val_loader, device, prefix=f"Fold {fold} Lab Val")        
+        y_val_true, y_val_pred = evaluate_model(trained_model, val_loader, device, prefix=f"Fold {fold} Lab Val")        
         fold_results_lab.append(balanced_accuracy_score(y_val_true, y_val_pred))
         # 2. Evaluate on out-of-domain Real dataset
-        #y_real_true, y_real_pred = evaluate_model(trained_model, real_loader, device, prefix=f"Fold {fold} Real Test")
+        y_real_true, y_real_pred = evaluate_model(trained_model, real_loader, device, prefix=f"Fold {fold} Real Test")
         fold_results_real.append(balanced_accuracy_score(y_real_true, y_real_pred))
 
     # Summary statistics across all 5 folds:
