@@ -99,6 +99,50 @@ class SmallEEGCNN(nn.Module):
         return self.classifier(x)
 
 
+class CNNLSTMOrdinalClassifier(nn.Module):
+    """CNN feature extractor followed by an LSTM over spectrogram windows."""
+
+    def __init__(self, num_classes=3, hidden_size=128, num_layers=1,
+                 dropout=0.35):
+        super().__init__()
+        if num_classes < 2:
+            raise ValueError("Ordinal classification requires at least two classes")
+        self.features = SmallEEGCNN(num_classes=128, dropout=dropout).features
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.temporal = nn.LSTM(
+            input_size=128,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0,
+        )
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size, num_classes - 1),
+        )
+
+    def forward(self, x):
+        if x.ndim != 5:
+            raise ValueError("CNN-LSTM input must have shape [batch, time, channels, height, width]")
+        batch_size, sequence_length = x.shape[:2]
+        frame_features = self.features(x.reshape(batch_size * sequence_length, *x.shape[2:]))
+        frame_features = self.global_pool(frame_features).flatten(1)
+        frame_features = frame_features.reshape(batch_size, sequence_length, -1)
+        sequence_features, _ = self.temporal(frame_features)
+        return self.classifier(sequence_features[:, sequence_length // 2])
+
+
+def build_cnn_lstm_ordinal_classifier(num_classes=3, hidden_size=128,
+                                      num_layers=1, dropout=0.35):
+    """Build an ordinal CNN-LSTM for fixed-length spectrogram sequences."""
+    return CNNLSTMOrdinalClassifier(
+        num_classes=num_classes,
+        hidden_size=hidden_size,
+        num_layers=num_layers,
+        dropout=dropout,
+    )
+
+
 def build_small_cnn_classifier(num_classes=2, dropout=0.35):
     """Build the compact CNN used by the Fz-only execution pipeline."""
     return SmallEEGCNN(num_classes=num_classes, dropout=dropout)
@@ -152,8 +196,13 @@ def train_ordinal_model(model, train_loader, val_loader, num_classes=3,
                               dtype=torch.float32, device=device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     feature_params = [p for p in model.features.parameters() if p.requires_grad]
+    temporal_params = [
+        p for p in getattr(model, "temporal", nn.Identity()).parameters()
+        if p.requires_grad
+    ]
     optimizer = torch.optim.Adam([
         {"params": feature_params, "lr": lr * 0.1},
+        {"params": temporal_params, "lr": lr},
         {"params": model.classifier.parameters(), "lr": lr},
     ], weight_decay=1e-4)
     print(f"Ordinal threshold positive counts: {positive.astype(int).tolist()}; "
