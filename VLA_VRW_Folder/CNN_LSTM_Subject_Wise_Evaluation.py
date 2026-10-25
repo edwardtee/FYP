@@ -31,7 +31,7 @@ SEQUENCE_LENGTH = 5
 CLASS_NAMES = ("Alert", "Transition", "Drowsy")
 MODEL_CHANNELS = ("Fz_Pz_uv",)
 CSV_DATASET_PATH = r"D:\FYP\VLA_VRW_CSV"
-RUN_TRAINING = True  # Set to False once you have trained, or when you just want Grad-CAM
+RUN_TRAINING = False  # Set to False once you have trained, or when you just want Grad-CAM
 
 
 def set_reproducible_seed(seed):
@@ -176,15 +176,14 @@ if __name__ == "__main__":
             fold_results_lab.append(balanced_accuracy_score(y_val, p_val))
             fold_results_real.append(balanced_accuracy_score(y_real, p_real))
 
-    print("\n" + "=" * 60)
-    print(f"CNN-LSTM Lab Val Balanced Acc: {np.mean(fold_results_lab):.4f} "
-          f"+/- {np.std(fold_results_lab):.4f}")
-    print(f"CNN-LSTM Real Balanced Acc: {np.mean(fold_results_real):.4f} "
-          f"+/- {np.std(fold_results_real):.4f}")
-
+        print("\n" + "=" * 60)
+        print(f"CNN-LSTM Lab Val Balanced Acc: {np.mean(fold_results_lab):.4f} "
+            f"+/- {np.std(fold_results_lab):.4f}")
+        print(f"CNN-LSTM Real Balanced Acc: {np.mean(fold_results_real):.4f} "
+            f"+/- {np.std(fold_results_real):.4f}")
 
     # --- Explainability (Loads saved weights instantly) ---
-    checkpoint_path = "cnn_lstm_fold1.pt"
+    checkpoint_path = "VLA_VRW_Folder/pt_file/cnn_lstm_fold1.pt"
     if os.path.exists(checkpoint_path):
         print(f"\nLoading {checkpoint_path} for Grad-CAM...")
         model = build_cnn_lstm_ordinal_classifier(num_classes=NUM_CLASSES, hidden_size=128, dropout=0.35)
@@ -194,10 +193,10 @@ if __name__ == "__main__":
             model,
             real_loader,
             device=device,
-            target_threshold=1,
-            sequence_index=0,
-            save_path="cnn_lstm_gradcam_drowsy.png",
+            target_threshold=0,
+            sequence_index=1,
+            save_path="cnn_lstm_gradcam_transition_f1s1.png",
         )
-        print("Grad-CAM saved to cnn_lstm_gradcam_drowsy.png")
+        print("Grad-CAM saved to cnn_lstm_gradcam_transition_f1s1.png")
     else:
         print(f"Checkpoint {checkpoint_path} not found. Please run training first.")

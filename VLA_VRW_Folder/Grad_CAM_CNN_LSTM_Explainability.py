@@ -80,10 +80,12 @@ def generate_cnn_lstm_gradcam(model, sequence, target_threshold=1,
 
     try:
         model.zero_grad(set_to_none=True)
-        logits = model(sequence)
-        cumulative = torch.sigmoid(logits)
-        predicted_class = int((cumulative >= 0.5).sum(dim=1).item())
-        logits[0, target_threshold].backward()
+        # Disable cuDNN so the LSTM backward pass works in eval mode.
+        with torch.backends.cudnn.flags(enabled=False):
+            logits = model(sequence)
+            cumulative = torch.sigmoid(logits)
+            predicted_class = int((cumulative >= 0.5).sum(dim=1).item())
+            logits[0, target_threshold].backward()
 
         # The CNN receives T frames as a flattened batch. Restore the time
         # dimension before calculating a separate CAM for every frame.
