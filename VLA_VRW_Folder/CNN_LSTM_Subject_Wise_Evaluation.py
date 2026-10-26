@@ -193,10 +193,19 @@ if __name__ == "__main__":
             model,
             real_loader,
             device=device,
-            target_threshold=0,
+            target_threshold=1,         # 0 = Transition, 1 = Drowsy
             sequence_index=1,
-            save_path="cnn_lstm_gradcam_transition_f1s1.png",
+            save_path="cnn_lstm_gradcam_f1s1_drowsy.png",
         )
-        print("Grad-CAM saved to cnn_lstm_gradcam_transition_f1s1.png")
+        print("Grad-CAM saved to cnn_lstm_gradcam_f1s1_drowsy.png")
+        show_cnn_lstm_gradcam_example(
+            model,
+            real_loader,
+            device=device,
+            target_threshold=0,         # 0 = Transition, 1 = Drowsy
+            sequence_index=1,
+            save_path="cnn_lstm_gradcam_f1s1_transition.png",
+        )
+        print("Grad-CAM saved to cnn_lstm_gradcam_f1s1_transition.png")
     else:
         print(f"Checkpoint {checkpoint_path} not found. Please run training first.")

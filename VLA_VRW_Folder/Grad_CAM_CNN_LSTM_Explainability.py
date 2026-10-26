@@ -7,6 +7,7 @@ explains one ordinal threshold at a time.
 
 import numpy as np
 import matplotlib.pyplot as plt
+from streamlit import image
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -153,12 +154,22 @@ def show_cnn_lstm_gradcam_example(model, data_loader, device="cuda",
         axes[time_index, 2].imshow(image, cmap="gray", origin="lower", aspect="auto")
         axes[time_index, 2].imshow(
             heatmaps[time_index], cmap="jet", alpha=0.45,
-            origin="lower", aspect="auto",
+            origin="lower", aspect="auto"
         )
         axes[time_index, 2].set_title("Overlay")
+
+        # 2. Map frequency values to row indices
+        num_freq_bins = image.shape[0]  # total height of image matrix
+        freq_bounds = [0.5, 4.0, 8.0, 13.0, 30.0]
+
+        # Calculate pixel indices corresponding to each frequency boundary
+        # (assuming 0 corresponds to 0.5 Hz and num_freq_bins-1 corresponds to 30.0 Hz)
+        y_indices = [(f - 0.5) / (30.0 - 0.5) * (num_freq_bins - 1) for f in freq_bounds]
         for axis in axes[time_index]:
-            axis.set_xlabel("Time")
-            axis.set_ylabel("Frequency")
+            axis.set_xlabel("Time (s)")
+            axis.set_ylabel("Frequency (Hz)")
+            axis.set_yticks(y_indices)
+            axis.set_yticklabels([f"{f} Hz" for f in freq_bounds])
 
     target_name = "class >= Drowsy" if target_threshold == 1 else "class >= Transition"
     fig.suptitle(
