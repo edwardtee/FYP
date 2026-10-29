@@ -15,7 +15,7 @@ import csv
 import cv2
 import numpy as np
 import pandas as pd
-from scipy.signal import spectrogram
+from scipy.signal import spectrogram, butter, sosfiltfilt
 
 
 CLASS_NAMES = ("alert", "transition", "drowsy")
@@ -44,6 +44,13 @@ def _stft_image(signal, fs=300.0, nperseg=600, noverlap=300, target_size=(224, 2
     image = cv2.normalize(power_db, None, 0, 255, cv2.NORM_MINMAX)
     return cv2.resize(image.astype(np.uint8), target_size, interpolation=cv2.INTER_CUBIC)
 
+def butter_bandpass_filter(data, lowcut=0.5, highcut=30.0, fs=300.0, order=4):
+    """Numerically stable, zero-phase Butterworth EEG band-pass filter."""
+    if not 0 < lowcut < highcut < fs / 2:
+        raise ValueError("Cut-offs must satisfy 0 < lowcut < highcut < Nyquist.")
+    sos = butter(order, [lowcut, highcut], btype="bandpass", fs=fs, output="sos")
+    return sosfiltfilt(sos, np.asarray(data, dtype=np.float64))
+
 
 def load_csv_recording(eeg_csv, perclos_csv, channels=DEFAULT_CHANNELS):
     """Return STFT images, labels, PERCLOS values and metadata for one recording."""
@@ -63,13 +70,17 @@ def load_csv_recording(eeg_csv, perclos_csv, channels=DEFAULT_CHANNELS):
         channel: eeg_frame[channel].to_numpy(dtype=np.float64)
         for channel in channels
     }
+    # 1. Apply Butterworth bandpass filter (0.5 - 30 Hz) across the continuous recording
+    # to eliminate baseline wander (< 0.5 Hz) and high-frequency muscle/powerline noise (> 30 Hz).
+    # 2. Normalize recording-level amplitude (median center, std scale).
     # Remove recording-specific DC offset and amplitude scale before the STFT.
     # This makes the lab-to-real comparison less sensitive to electrode
     # impedance, subject amplitude, and recording-gain differences.
     for channel, signal in signals.items():
-        center = np.median(signal)
-        scale = np.std(signal)
-        signals[channel] = (signal - center) / max(scale, 1e-8)
+        filtered = butter_bandpass_filter(signal, lowcut=0.5, highcut=30.0, fs=fs, order=4)
+        center = np.median(filtered)
+        scale = np.std(filtered)
+        signals[channel] = (filtered - center) / max(scale, 1e-8)
 
     images, labels, values, metadata = [], [], [], []
     for row in perclos_rows:

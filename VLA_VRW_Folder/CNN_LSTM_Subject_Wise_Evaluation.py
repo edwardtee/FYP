@@ -22,6 +22,7 @@ from PyTorch_Dataset_And_VGG16_Model_Setup import (
 from VLA_VRW_CSV_Dataset import load_benchmark_split
 from Grad_CAM_CNN_LSTM_Explainability import (
     show_cnn_lstm_gradcam_example,
+    evaluate_cnn_lstm_gradcam_quantitative,
 )
 
 
@@ -198,6 +199,19 @@ if __name__ == "__main__":
             save_path="cnn_lstm_gradcam_f1s1_drowsy.png",
         )
         print("Grad-CAM saved to cnn_lstm_gradcam_f1s1_drowsy.png")
+        results_lstm = evaluate_cnn_lstm_gradcam_quantitative(
+            model,
+            real_loader,              # sequences loader
+            device=device,
+            target_threshold=1,       # 0 = Transition, 1 = Drowsy
+            top_k_frac=0.10,
+            noise_std=0.05,
+            n_stability_reps=5,
+            max_samples=30,
+            save_path="cnn_lstm_gradcam_quantitative_evaluation.png",
+            save_band_plot=True,
+            band_save_path="cnn_lstm_gradcam_band_attribution.png"
+        )
         show_cnn_lstm_gradcam_example(
             model,
             real_loader,

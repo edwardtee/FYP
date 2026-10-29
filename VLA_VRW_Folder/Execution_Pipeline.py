@@ -219,7 +219,7 @@ if __name__ == "__main__":
     )
 
     if RUN_EXPLAINABILITY:
-        from Grad_CAM_Explainability import show_gradcam_example
+        from Grad_CAM_Explainability import (show_gradcam_example, evaluate_gradcam_quantitative)
 
         show_gradcam_example(
             trained_model,
@@ -229,6 +229,19 @@ if __name__ == "__main__":
             target_class=1,
             sample_index=0,
             save_path="gradcam_real_drowsy.png",
+        )
+        results = evaluate_gradcam_quantitative(
+            trained_model,
+            real_loader,              # or (test_batch, labels)
+            device=device,
+            target_class=2,           # 2 = Drowsy
+            top_k_frac=0.10,
+            noise_std=0.05,
+            n_stability_reps=5,
+            max_samples=40,
+            save_path="gradcam_quantitative_evaluation.png",
+            save_band_plot=True,
+            band_save_path="gradcam_band_attribution.png"
         )
         if USE_ORDINAL_MODEL:
             print("SHAP is disabled for ordinal output: explain one ordinal "

@@ -66,6 +66,13 @@ class SmallEEGCNN(nn.Module):
 
     def __init__(self, num_classes=2, dropout=0.35):
         super().__init__()
+        ''' Input (N, 3, 224, 224) -> Output (N, num_classes) 
+        Define a small CNN architecture with convolutional layers, batch normalization, ReLU activations, and max pooling.
+        Expanse the number of channels in each layer to capture more complex features while keeping the model compact. 
+        (3 input channels for RGB, 16 -> 32 -> 64 -> 128 channels)
+        Use adaptive average pooling to reduce the spatial dimensions before classification. (1x1 output for each channel, total 128 channels)
+        Finally, flatten the features and apply dropout for regularization before the final linear layer for classification.
+        '''
         self.features = nn.Sequential(
             nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(16),
