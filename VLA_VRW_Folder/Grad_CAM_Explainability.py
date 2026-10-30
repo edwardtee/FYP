@@ -127,6 +127,48 @@ def generate_gradcam(model, image, target_layer=None, target_class=None,
             model.train()
 
 
+def generate_channel_gradcams(model, image, target_layer=None, target_class=None,
+                              device="cuda"):
+    """Generate one isolated Grad-CAM map for each input channel.
+
+    For a four-band EEG image, each pass keeps one band and zeros the other
+    three. The target class is selected from the complete input unless it is
+    supplied explicitly. The resulting maps show each band's standalone
+    contribution; cross-band interactions are not represented.
+
+    Returns
+    -------
+    channel_cams : np.ndarray
+        Array with shape ``(4, H, W)``.
+    predicted_class : int
+        Prediction from the complete four-band input.
+    probabilities : np.ndarray
+        Probabilities from the complete four-band input.
+    """
+    if image.ndim == 3:
+        image = image.unsqueeze(0)
+    if image.ndim != 4 or image.shape[1] != 4:
+        raise ValueError("Expected a four-band image with shape [4,H,W]")
+
+    full_cam, predicted_class, probabilities = generate_gradcam(
+        model, image, target_layer=target_layer, target_class=target_class,
+        device=device
+    )
+    del full_cam
+    class_to_explain = predicted_class if target_class is None else int(target_class)
+
+    channel_cams = []
+    for channel_index in range(image.shape[1]):
+        isolated = torch.zeros_like(image)
+        isolated[:, channel_index] = image[:, channel_index]
+        channel_cam, _, _ = generate_gradcam(
+            model, isolated, target_layer=target_layer,
+            target_class=class_to_explain, device=device
+        )
+        channel_cams.append(channel_cam)
+    return np.stack(channel_cams, axis=0), predicted_class, probabilities
+
+
 def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
                          true_class_names=None,
                          target_class=None, sample_index=0,
@@ -169,6 +211,9 @@ def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
         # figure so the explanation remains auditable.
         band_names = ("Delta (0.5-4 Hz)", "Theta (4-8 Hz)",
                       "Alpha (8-13 Hz)", "Beta (13-30 Hz)")
+        channel_cams, _, _ = generate_channel_gradcams(
+            model, image, target_class=target_class, device=device
+        )
         fig, axes = plt.subplots(4, 3, figsize=(13, 14), squeeze=False)
         for band_index, band_name in enumerate(band_names):
             display_image = image_np[band_index]
@@ -179,14 +224,15 @@ def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
             )
             axes[band_index, 0].set_title(f"{band_name}\nInput (True: {true_label_text})")
             axes[band_index, 1].imshow(
-                heatmap, cmap="jet", origin="lower", aspect="auto"
+                channel_cams[band_index], cmap="jet", origin="lower", aspect="auto"
             )
-            axes[band_index, 1].set_title("Grad-CAM importance")
+            axes[band_index, 1].set_title("Channel-specific Grad-CAM")
             axes[band_index, 2].imshow(
                 display_image, cmap="gray", origin="lower", aspect="auto"
             )
             axes[band_index, 2].imshow(
-                heatmap, cmap="jet", alpha=0.45, origin="lower", aspect="auto"
+                channel_cams[band_index], cmap="jet", alpha=0.45,
+                origin="lower", aspect="auto"
             )
             axes[band_index, 2].set_title(
                 f"Explained: {class_names[explained_class]} | "
@@ -201,7 +247,7 @@ def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
         fig.savefig(save_path, dpi=200, bbox_inches="tight")
         plt.show()
         plt.close(fig)
-        return heatmap, predicted_class, probabilities
+        return channel_cams, predicted_class, probabilities
 
     # Legacy three-channel input: average channels for a single display image.
     display_image = image_np.transpose(1, 2, 0).mean(axis=2)
