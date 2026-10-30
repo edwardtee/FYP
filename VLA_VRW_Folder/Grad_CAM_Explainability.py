@@ -1,4 +1,4 @@
-"""Grad-CAM explanation for the VGG16 EEG-spectrogram classifier.
+"""Grad-CAM explanation for the EEG-spectrogram classifier.
 
 Example usage (after ``trained_model`` and ``val_loader`` are created)::
 
@@ -28,7 +28,7 @@ def generate_gradcam(model, image, target_layer=None, target_class=None,
     image : torch.Tensor
         One preprocessed image with shape ``(C, H, W)`` or ``(1, C, H, W)``.
     target_layer : torch.nn.Module, optional
-        Convolutional layer to explain. For this VGG16 model, ``model.features[-1]``
+        Convolutional layer to explain. For this model, ``model.features[-1]``
         is a suitable default.
     target_class : int, optional
         Class to explain. If omitted, the model's predicted class is used.
@@ -49,7 +49,7 @@ def generate_gradcam(model, image, target_layer=None, target_class=None,
     was_training = model.training
     model.eval()
 
-    # VGG16 uses in-place ReLU operations. They can conflict with PyTorch's
+    # Model uses in-place ReLU operations. They can conflict with PyTorch's
     # backward hooks because the hook output is treated as a view. Disable
     # in-place behaviour only while computing Grad-CAM, then restore it.
     relu_layers = [layer for layer in model.modules() if isinstance(layer, nn.ReLU)]
@@ -59,7 +59,7 @@ def generate_gradcam(model, image, target_layer=None, target_class=None,
 
     if target_layer is None:
         # Use the final convolution, before the final ReLU, so the activation
-        # map still has useful spatial information for the VGG16 classifier.
+        # map still has useful spatial information for the classifier.
         target_layer = next(
             layer for layer in reversed(model.features)
             if isinstance(layer, nn.Conv2d)
@@ -174,7 +174,7 @@ def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
 
 
 # ---------------------------------------------------------------------------
-# Quantitative Grad-CAM Quality Metrics (VGG16)
+# Quantitative Grad-CAM Quality Metrics
 # ---------------------------------------------------------------------------
 
 FREQ_MIN_HZ, FREQ_MAX_HZ, IMAGE_HEIGHT = 0.5, 30.0, 224
@@ -219,7 +219,7 @@ def _cosine_sim(a, b):
 
 def _plot_gradcam_quantitative_summary(results, gini_vals, cos_sims,
                                        auc_orig, auc_occ, N,
-                                       title="Quantitative Grad-CAM Evaluation (VGG16)",
+                                       title="Quantitative Grad-CAM Evaluation",
                                        save_path="gradcam_quantitative_evaluation.png"):
     """Produces a 4-panel standalone summary figure for quantitative Grad-CAM metrics."""
     fig, axes = plt.subplots(1, 4, figsize=(16, 4.5), gridspec_kw={"wspace": 0.45})
@@ -393,12 +393,12 @@ def evaluate_gradcam_quantitative(model, data_source, true_labels=None,
                                   save_path="gradcam_quantitative_evaluation.png",
                                   save_band_plot=True,
                                   band_save_path="gradcam_band_attribution.png"):
-    """Compute Fidelity, Stability, Sparsity, and Band Localization for VGG16 Grad-CAM.
+    """Compute Fidelity, Stability, Sparsity, and Band Localization for Grad-CAM.
 
     Parameters
     ----------
     model : torch.nn.Module
-        Trained VGG16 classifier.
+        Trained classifier.
     data_source : DataLoader, tuple, or torch.Tensor
         Validation or test data. Can be a PyTorch DataLoader yielding (images, labels),
         a tuple of (test_batch, labels), or a Tensor of shape (N, C, H, W).
@@ -464,7 +464,7 @@ def evaluate_gradcam_quantitative(model, data_source, true_labels=None,
         target_class = min(int(target_class), out_features - 1)
 
     print("\n" + "=" * 60)
-    print("  QUANTITATIVE GRAD-CAM EVALUATION (VGG16)")
+    print("  QUANTITATIVE GRAD-CAM EVALUATION")
     print("=" * 60)
     print(f"  Samples: {N} | Target class/threshold: {target_class}")
 
@@ -599,7 +599,7 @@ def evaluate_gradcam_quantitative(model, data_source, true_labels=None,
     # ------------------------------------------------------------------
     _plot_gradcam_quantitative_summary(
         results, gini_vals, cos_sims, auc_orig, auc_occ, N,
-        title="Quantitative Grad-CAM Evaluation (VGG16)",
+        title="Quantitative Grad-CAM Evaluation",
         save_path=save_path
     )
     print(f"\n  Summary figure saved -> {save_path}")

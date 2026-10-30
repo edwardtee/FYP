@@ -14,7 +14,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data import DataLoader, Dataset, Subset
 
 from PyTorch_Dataset_And_VGG16_Model_Setup import (
-    DROZYSpectrogramDataset,
+    SpectrogramDataset,
     build_cnn_lstm_ordinal_classifier,
     transform_pipeline,
     train_ordinal_model,
@@ -114,8 +114,8 @@ if __name__ == "__main__":
         f"lab_subject_{item['subject_id']}" for item in metadata_lab
     ])
     split = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=SEED)
-    lab_frame_dataset = DROZYSpectrogramDataset(X_lab, y_lab, transform=transform_pipeline)
-    real_frame_dataset = DROZYSpectrogramDataset(X_real, y_real, transform=transform_pipeline)
+    lab_frame_dataset = SpectrogramDataset(X_lab, y_lab, transform=transform_pipeline)
+    real_frame_dataset = SpectrogramDataset(X_real, y_real, transform=transform_pipeline)
     real_sequences, real_centres = make_sequence_indices(
         metadata_real, range(len(X_real)), SEQUENCE_LENGTH
     )

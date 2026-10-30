@@ -17,7 +17,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 
 from STFT_Spectrogram_Generation import load_drozy_dataset
 from PyTorch_Dataset_And_VGG16_Model_Setup import (
-    DROZYSpectrogramDataset, build_small_cnn_classifier, build_vgg16_classifier, transform_pipeline, train_vgg16,
+    SpectrogramDataset, build_small_cnn_classifier, build_vgg16_classifier, transform_pipeline, train_vgg16,
 )
 from SHAP_Analysis_And_Evaluation import classify_loader_full
 
@@ -46,7 +46,7 @@ def main():
     X_data, y_data, subject_groups = load_drozy_dataset(
         DATASET_ROOT, return_groups=True, eeg_channels=MODEL_CHANNELS
     )
-    dataset = DROZYSpectrogramDataset(X_data, y_data, transform=transform_pipeline)
+    dataset = SpectrogramDataset(X_data, y_data, transform=transform_pipeline)
     outer_cv = StratifiedGroupKFold(n_splits=N_OUTER_FOLDS, shuffle=True,
                                     random_state=SEED)
     fold_results = []

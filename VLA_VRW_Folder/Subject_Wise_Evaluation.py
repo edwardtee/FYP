@@ -15,7 +15,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data import DataLoader, Subset
 
 from PyTorch_Dataset_And_VGG16_Model_Setup import (
-    DROZYSpectrogramDataset,
+    SpectrogramDataset,
     build_small_cnn_ordinal_classifier,
     ordinal_logits_to_classes,
     transform_pipeline,
@@ -150,8 +150,8 @@ if __name__ == "__main__":
     lab_groups = np.asarray([f"lab_subject_{item['subject_id']}" for item in metadata_lab])
     split = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=SEED)
     
-    lab_dataset = DROZYSpectrogramDataset(X_lab, y_lab, transform=transform_pipeline)
-    real_dataset = DROZYSpectrogramDataset(X_real, y_real, transform=transform_pipeline)
+    lab_dataset = SpectrogramDataset(X_lab, y_lab, transform=transform_pipeline)
+    real_dataset = SpectrogramDataset(X_real, y_real, transform=transform_pipeline)
     real_loader = DataLoader(real_dataset, batch_size=16, shuffle=False, num_workers=0)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

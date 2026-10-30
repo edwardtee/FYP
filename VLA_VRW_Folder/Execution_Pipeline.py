@@ -15,7 +15,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data import DataLoader
 
 from PyTorch_Dataset_And_VGG16_Model_Setup import (
-    DROZYSpectrogramDataset,
+    SpectrogramDataset,
     build_small_cnn_classifier,
     build_small_cnn_ordinal_classifier,
     ordinal_logits_to_classes,
@@ -156,8 +156,8 @@ if __name__ == "__main__":
     print(f"Lab train subjects: {sorted(train_subjects)}")
     print(f"Lab validation subjects: {sorted(val_subjects)}")
 
-    lab_dataset = DROZYSpectrogramDataset(X_lab, y_lab, transform=transform_pipeline)
-    real_dataset = DROZYSpectrogramDataset(X_real, y_real, transform=transform_pipeline)
+    lab_dataset = SpectrogramDataset(X_lab, y_lab, transform=transform_pipeline)
+    real_dataset = SpectrogramDataset(X_real, y_real, transform=transform_pipeline)
     train_set = torch.utils.data.Subset(lab_dataset, train_idx)
     val_set = torch.utils.data.Subset(lab_dataset, val_idx)
     val_metadata = [metadata_lab[index] for index in val_idx]

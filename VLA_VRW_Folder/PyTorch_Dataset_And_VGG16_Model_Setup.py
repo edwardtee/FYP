@@ -13,7 +13,7 @@ transform_pipeline = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-class DROZYSpectrogramDataset(Dataset):
+class SpectrogramDataset(Dataset):
     def __init__(self, images, labels, transform=None):
         self.images = images
         self.labels = labels
