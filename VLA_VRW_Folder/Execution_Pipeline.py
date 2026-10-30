@@ -20,6 +20,7 @@ from PyTorch_Dataset_And_VGG16_Model_Setup import (
     build_small_cnn_ordinal_classifier,
     ordinal_logits_to_classes,
     transform_pipeline,
+    four_band_transform,
     train_vgg16,
     train_ordinal_model,
 )
@@ -32,8 +33,9 @@ CLASS_NAMES = ("Alert", "Transition", "Drowsy")
 # Keep the stronger Fz-only baseline for the benchmark. The three-channel
 # experiment reduced held-out balanced accuracy in the current split.
 MODEL_CHANNELS = ("Fz_Pz_uv",)
+USE_FOUR_BAND_INPUT = True  # False = broadband 0.5-30 Hz, True = delta/theta/alpha/beta
 CSV_DATASET_PATH = r"D:\FYP\VLA_VRW_CSV"
-RUN_EXPLAINABILITY = False
+RUN_EXPLAINABILITY = True
 # First controlled improvement experiment: ordinary three-class CNN with
 # inverse-frequency weighted cross-entropy.  The ordinal model remains below
 # for comparison by changing this flag and the training block.
@@ -133,10 +135,15 @@ if __name__ == "__main__":
     set_reproducible_seed(SEED)
 
     (X_lab, y_lab, perclos_lab, metadata_lab), (X_real, y_real, perclos_real, metadata_real) = (
-        load_benchmark_split(CSV_DATASET_PATH, channels=MODEL_CHANNELS)
+        load_benchmark_split(
+            CSV_DATASET_PATH,
+            channels=MODEL_CHANNELS,
+            representation="four_band" if USE_FOUR_BAND_INPUT else "broadband",
+        )
     )
 
     print(f"Model EEG channels: {MODEL_CHANNELS}")
+    print("Input representation:", "delta/theta/alpha/beta" if USE_FOUR_BAND_INPUT else "0.5-30 Hz broadband")
     print(f"Lab samples: {X_lab.shape}; labels: {y_lab.shape}")
     print(f"Real samples: {X_real.shape}; labels: {y_real.shape}")
     print(f"PERCLOS classes: {CLASS_NAMES}")
@@ -156,8 +163,10 @@ if __name__ == "__main__":
     print(f"Lab train subjects: {sorted(train_subjects)}")
     print(f"Lab validation subjects: {sorted(val_subjects)}")
 
-    lab_dataset = SpectrogramDataset(X_lab, y_lab, transform=transform_pipeline)
-    real_dataset = SpectrogramDataset(X_real, y_real, transform=transform_pipeline)
+    input_channels = 4 if USE_FOUR_BAND_INPUT else 3
+    image_transform = four_band_transform if USE_FOUR_BAND_INPUT else transform_pipeline
+    lab_dataset = SpectrogramDataset(X_lab, y_lab, transform=image_transform)
+    real_dataset = SpectrogramDataset(X_real, y_real, transform=image_transform)
     train_set = torch.utils.data.Subset(lab_dataset, train_idx)
     val_set = torch.utils.data.Subset(lab_dataset, val_idx)
     val_metadata = [metadata_lab[index] for index in val_idx]
@@ -168,13 +177,17 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if USE_ORDINAL_MODEL:
-        model = build_small_cnn_ordinal_classifier(num_classes=NUM_CLASSES, dropout=0.35)
+        model = build_small_cnn_ordinal_classifier(
+            num_classes=NUM_CLASSES, dropout=0.35, in_channels=input_channels
+        )
         trained_model = train_ordinal_model(
             model, train_loader, val_loader, num_classes=NUM_CLASSES,
             epochs=25, lr=3e-4, device=device, early_stopping_patience=5,
         )
     else:
-        model = build_small_cnn_classifier(num_classes=NUM_CLASSES, dropout=0.35)
+        model = build_small_cnn_classifier(
+            num_classes=NUM_CLASSES, dropout=0.35, in_channels=input_channels
+        )
         trained_model = train_vgg16(
             model, train_loader, val_loader, epochs=25, lr=3e-4,
             device=device, early_stopping_patience=5, class_weight_power=1.0,
@@ -226,6 +239,7 @@ if __name__ == "__main__":
             real_loader,
             device=device,
             class_names=("PERCLOS >= 0.35", "PERCLOS > 0.70"),
+            true_class_names=CLASS_NAMES,
             target_class=1,
             sample_index=0,
             save_path="gradcam_real_drowsy.png",
@@ -233,8 +247,8 @@ if __name__ == "__main__":
         results = evaluate_gradcam_quantitative(
             trained_model,
             real_loader,              # or (test_batch, labels)
-            device=device,
             target_class=2,           # 2 = Drowsy
+            device=device,
             top_k_frac=0.10,
             noise_std=0.05,
             n_stability_reps=5,

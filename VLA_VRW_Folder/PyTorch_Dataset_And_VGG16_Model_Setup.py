@@ -13,6 +13,13 @@ transform_pipeline = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
+
+def four_band_transform(img):
+    """Convert a HxWx4 uint8 band image to a [4,H,W] float tensor."""
+    if img.ndim != 3 or img.shape[2] != 4:
+        raise ValueError(f"Expected HxWx4 four-band image, got {img.shape}")
+    return torch.from_numpy(img.astype(np.float32) / 255.0).permute(2, 0, 1)
+
 class SpectrogramDataset(Dataset):
     def __init__(self, images, labels, transform=None):
         self.images = images
@@ -58,15 +65,15 @@ def build_vgg16_classifier(num_classes=2, freeze_features=True):
 
 
 class SmallEEGCNN(nn.Module):
-    """Compact CNN for 224x224 single-channel Fz spectrograms replicated to RGB.
+    """Compact CNN for 224x224 spectrograms with configurable input channels.
 
     Adaptive pooling makes the classifier less dependent on the exact spatial
     size of the spectrogram and keeps the parameter count much lower than VGG16.
     """
 
-    def __init__(self, num_classes=2, dropout=0.35):
+    def __init__(self, num_classes=2, dropout=0.35, in_channels=3):
         super().__init__()
-        ''' Input (N, 3, 224, 224) -> Output (N, num_classes) 
+        ''' Input (N, in_channels, 224, 224) -> Output (N, num_classes)
         Define a small CNN architecture with convolutional layers, batch normalization, ReLU activations, and max pooling.
         Expanse the number of channels in each layer to capture more complex features while keeping the model compact. 
         (3 input channels for RGB, 16 -> 32 -> 64 -> 128 channels)
@@ -74,7 +81,7 @@ class SmallEEGCNN(nn.Module):
         Finally, flatten the features and apply dropout for regularization before the final linear layer for classification.
         '''
         self.features = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(in_channels, 16, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(16),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2),
@@ -110,11 +117,13 @@ class CNNLSTMOrdinalClassifier(nn.Module):
     """CNN feature extractor followed by an LSTM over spectrogram windows."""
 
     def __init__(self, num_classes=3, hidden_size=128, num_layers=1,
-                 dropout=0.35):
+                 dropout=0.35, in_channels=3):
         super().__init__()
         if num_classes < 2:
             raise ValueError("Ordinal classification requires at least two classes")
-        self.features = SmallEEGCNN(num_classes=128, dropout=dropout).features
+        self.features = SmallEEGCNN(
+            num_classes=128, dropout=dropout, in_channels=in_channels
+        ).features
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.temporal = nn.LSTM(
             input_size=128,
@@ -140,22 +149,25 @@ class CNNLSTMOrdinalClassifier(nn.Module):
 
 
 def build_cnn_lstm_ordinal_classifier(num_classes=3, hidden_size=128,
-                                      num_layers=1, dropout=0.35):
+                                      num_layers=1, dropout=0.35,
+                                      in_channels=3):
     """Build an ordinal CNN-LSTM for fixed-length spectrogram sequences."""
     return CNNLSTMOrdinalClassifier(
         num_classes=num_classes,
         hidden_size=hidden_size,
         num_layers=num_layers,
         dropout=dropout,
+        in_channels=in_channels,
     )
 
 
-def build_small_cnn_classifier(num_classes=2, dropout=0.35):
+def build_small_cnn_classifier(num_classes=2, dropout=0.35, in_channels=3):
     """Build the compact CNN used by the Fz-only execution pipeline."""
-    return SmallEEGCNN(num_classes=num_classes, dropout=dropout)
+    return SmallEEGCNN(num_classes=num_classes, dropout=dropout,
+                       in_channels=in_channels)
 
 
-def build_small_cnn_ordinal_classifier(num_classes=3, dropout=0.35):
+def build_small_cnn_ordinal_classifier(num_classes=3, dropout=0.35, in_channels=3):
     """Build a cumulative ordinal classifier.
 
     For K ordered classes, the head has K-1 outputs. For the three PERCLOS
@@ -163,7 +175,8 @@ def build_small_cnn_ordinal_classifier(num_classes=3, dropout=0.35):
     """
     if num_classes < 2:
         raise ValueError("Ordinal classification requires at least two classes")
-    return SmallEEGCNN(num_classes=num_classes - 1, dropout=dropout)
+    return SmallEEGCNN(num_classes=num_classes - 1, dropout=dropout,
+                       in_channels=in_channels)
 
 
 def ordinal_targets(labels, num_classes=3):

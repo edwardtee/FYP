@@ -186,7 +186,7 @@ def generate_shap_explanations(model, background_loader, test_loader, device='cu
     for s in shap_list_raw:
         if hasattr(s, 'cpu'):
             s = s.cpu().detach().numpy()
-        if s.ndim == 4 and s.shape[1] in [1, 3]:  # (N, C, H, W) channels-first
+        if s.ndim == 4 and s.shape[1] in [1, 3, 4]:  # (N, C, H, W) channels-first
             s = np.transpose(s, (0, 2, 3, 1))      # -> (N, H, W, C)
         shap_list_formatted.append(s)
 
@@ -233,7 +233,7 @@ def generate_shap_explanations2(model, background_loader, test_loader, device='c
 
     # Reorder PyTorch tensors (N, C, H, W) -> Matplotlib arrays (N, H, W, C)
     shap_list_formatted = [
-        np.transpose(s, (0, 2, 3, 1)) if s.ndim == 4 and s.shape[1] in [1, 3] else s 
+        np.transpose(s, (0, 2, 3, 1)) if s.ndim == 4 and s.shape[1] in [1, 3, 4] else s
         for s in shap_list
     ]
 
@@ -288,7 +288,7 @@ def generate_shap_explanations1(model, background_loader, test_loader, device='c
             s = s.cpu().detach().numpy()
             
         # Reorder channels-first (N, C, H, W) -> channels-last (N, H, W, C)
-        if s.ndim == 4 and s.shape[1] in [1, 3]:
+        if s.ndim == 4 and s.shape[1] in [1, 3, 4]:
             s = np.transpose(s, (0, 2, 3, 1))
             
         # If 4D with 3 RGB channels, sum across channels while KEEPING channel axis -> (N, H, W, 1)

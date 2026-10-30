@@ -90,7 +90,7 @@ def _extract_shap_for_class(shap_values, class_idx, num_classes):
         arr = sv                                # single class
 
     # Channels-first -> channels-last
-    if arr.ndim == 4 and arr.shape[1] in (1, 3):
+    if arr.ndim == 4 and arr.shape[1] in (1, 3, 4):
         arr = np.transpose(arr, (0, 2, 3, 1))  # (N, H, W, C)
 
     # Collapse colour channels to single attribution map

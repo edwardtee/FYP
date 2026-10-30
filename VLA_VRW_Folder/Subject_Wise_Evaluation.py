@@ -255,6 +255,7 @@ if __name__ == "__main__":
             real_loader,
             device=device,
             class_names=("PERCLOS >= 0.35", "PERCLOS > 0.70"),
+            true_class_names=CLASS_NAMES,
             target_class=1,
             sample_index=0,
             save_path="gradcam_real_drowsy.png",

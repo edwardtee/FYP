@@ -88,13 +88,26 @@ def generate_gradcam(model, image, target_layer=None, target_class=None,
         probabilities_tensor = torch.softmax(logits, dim=1)
         predicted_class = int(torch.argmax(probabilities_tensor, dim=1).item())
         class_to_explain = predicted_class if target_class is None else int(target_class)
+        if not 0 <= class_to_explain < logits.shape[1]:
+            raise ValueError(
+                f"target_class={class_to_explain} is invalid for a model with "
+                f"{logits.shape[1]} output(s). For the ordinal model, use "
+                "threshold 0 or 1."
+            )
 
         logits[0, class_to_explain].backward()
 
         # Average gradients over spatial locations to obtain channel weights.
         weights = gradients[0].mean(dim=(2, 3), keepdim=True)
-        cam = (weights * activations[0]).sum(dim=1, keepdim=True)
-        cam = torch.relu(cam)
+        raw_cam = (weights * activations[0]).sum(dim=1, keepdim=True)
+        cam = torch.relu(raw_cam)
+        # Ordinal heads and confidently classified samples can produce a
+        # purely negative Grad-CAM map. Standard ReLU would make that map
+        # visually empty, so retain magnitude as a diagnostic fallback.
+        if float(cam.detach().abs().max()) <= 1e-12:
+            cam = raw_cam.abs()
+        if float(cam.detach().abs().max()) <= 1e-12:
+            cam = gradients[0].abs().mean(dim=1, keepdim=True)
         cam = torch.nn.functional.interpolate(
             cam, size=image.shape[-2:], mode="bilinear", align_corners=False
         )
@@ -115,6 +128,7 @@ def generate_gradcam(model, image, target_layer=None, target_class=None,
 
 
 def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
+                         true_class_names=None,
                          target_class=None, sample_index=0,
                          save_path="gradcam_example.png"):
     """Display and save one validation-set Grad-CAM explanation.
@@ -125,6 +139,11 @@ def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
     not for recovering the original spectrogram color scale.
     """
     class_names = list(class_names or ["Alert", "Transition", "Drowsy"])
+    if true_class_names is None:
+        true_class_names = ["Alert", "Transition", "Drowsy"]
+    else:
+        true_class_names = list(true_class_names)
+
     if len(class_names) != int(model.classifier[-1].out_features):
         raise ValueError("class_names must have one name per model output class")
     images, labels = next(iter(data_loader))
@@ -133,21 +152,65 @@ def show_gradcam_example(model, data_loader, device="cuda", class_names=None,
 
     image = images[sample_index]
     true_class = int(labels[sample_index].item())
+    true_label_text = (
+        true_class_names[true_class]
+        if true_class < len(true_class_names)
+        else str(true_class)
+    )
     heatmap, predicted_class, probabilities = generate_gradcam(
         model, image, target_class=target_class, device=device
     )
     explained_class = predicted_class if target_class is None else int(target_class)
 
-    # Convert the 3-channel normalized tensor to a displayable grayscale image.
-    # Averaging channels is appropriate here because the EEG channels are
-    # encoded as image channels (for example Fz, Cz, and C3).
-    display_image = image.detach().cpu().numpy().transpose(1, 2, 0).mean(axis=2)
+    image_np = image.detach().cpu().numpy()
+
+    if image_np.shape[0] == 4:
+        # Four-band input is not RGB. Preserve the band identity in the XAI
+        # figure so the explanation remains auditable.
+        band_names = ("Delta (0.5-4 Hz)", "Theta (4-8 Hz)",
+                      "Alpha (8-13 Hz)", "Beta (13-30 Hz)")
+        fig, axes = plt.subplots(4, 3, figsize=(13, 14), squeeze=False)
+        for band_index, band_name in enumerate(band_names):
+            display_image = image_np[band_index]
+            display_image -= display_image.min()
+            display_image /= display_image.max() + 1e-8
+            axes[band_index, 0].imshow(
+                display_image, cmap="viridis", origin="lower", aspect="auto"
+            )
+            axes[band_index, 0].set_title(f"{band_name}\nInput (True: {true_label_text})")
+            axes[band_index, 1].imshow(
+                heatmap, cmap="jet", origin="lower", aspect="auto"
+            )
+            axes[band_index, 1].set_title("Grad-CAM importance")
+            axes[band_index, 2].imshow(
+                display_image, cmap="gray", origin="lower", aspect="auto"
+            )
+            axes[band_index, 2].imshow(
+                heatmap, cmap="jet", alpha=0.45, origin="lower", aspect="auto"
+            )
+            axes[band_index, 2].set_title(
+                f"Explained: {class_names[explained_class]} | "
+                f"Prediction: {class_names[predicted_class]} "
+                f"({probabilities[predicted_class]:.2%})"
+            )
+            for axis in axes[band_index]:
+                axis.set_xlabel("Time")
+                axis.set_ylabel("Band frequency")
+        fig.suptitle("Four-Band Grad-CAM Explanation", fontsize=14)
+        fig.tight_layout()
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+        plt.show()
+        plt.close(fig)
+        return heatmap, predicted_class, probabilities
+
+    # Legacy three-channel input: average channels for a single display image.
+    display_image = image_np.transpose(1, 2, 0).mean(axis=2)
     display_image -= display_image.min()
     display_image /= display_image.max() + 1e-8
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4))
     axes[0].imshow(display_image, cmap="viridis", origin="lower", aspect="auto")
-    axes[0].set_title(f"Input spectrogram\nTrue: {class_names[true_class]}")
+    axes[0].set_title(f"Input spectrogram\nTrue: {true_label_text}")
 
     axes[1].imshow(heatmap, cmap="jet", origin="lower", aspect="auto")
     axes[1].set_title("Grad-CAM importance")
